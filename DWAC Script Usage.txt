@@ -1,0 +1,38 @@
+[Map Commands]
+	- Set a comment marker and write one of the following commands:
+		-smoke;<color>  (red|green|blue|orange|white)
+			Places smoke at the marker location
+		-flare
+			Places an illumination bomb at the marker location and at a configured altitude (700m default)
+			
+
+Single-Script Install
+	In Mission Editor (ME), create a start-up trigger
+		TRIGGERS -> ONCE: NO EVENT
+		CONDITIONS -> TIME MORE (3)
+		ACTIONS -> 
+			While editing (ensures changes are loaded)
+				ACTION - DO SCRIPT
+				TEXT - dofile([[C:\path\to\Saved Games\DCS\Scripts\DWAC.lua]])
+			
+			For deployment
+				ACTION - DO SCRIPT FILE
+				FILE - C:\path\to\Saved Games\DCS\Scripts\DWAC.lua
+				
+As part of another script (i.e. CTLD.lua)
+	In the parent script that is loaded (as above), add the following to the user editable part:
+	--[[
+		Implement DWAC.lua
+	]]
+		package.path =
+			''
+			.. lfs.writedir() .. "Scripts/?.lua"
+			.. package.path
+			
+		local dwac = _G.require "DWAC" -- DWAC.lua must reside with this script
+		--dwac.doFoo()
+	--[[
+		DWAT.lua available below
+	]]
+		
+		
