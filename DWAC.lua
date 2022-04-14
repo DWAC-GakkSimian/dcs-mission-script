@@ -23,6 +23,7 @@ lfs                     = require "lfs" -- lfs.writedir() provided by DCS and po
 
 local dwac = {}
 local baseName = "DWAC"
+local version = "0.1.0"
 
 env.info(baseName .. " starting")
 -- ##########################
@@ -87,16 +88,22 @@ local function setMapSmoke(requestText, vector)
         color = string.lower(smokeColor)
         if color == "green" then
             trigger.action.smoke(vector, trigger.smokeColor.Green)
+            return true
         elseif color == "red" then
             trigger.action.smoke(vector, trigger.smokeColor.Red)
+            return true
         elseif color == "white" then
             trigger.action.smoke(vector, trigger.smokeColor.White)
+            return true
         elseif color == "orange" then
             trigger.action.smoke(vector, trigger.smokeColor.Orange)
+            return true
         elseif color == "blue" then
             trigger.action.smoke(vector, trigger.smokeColor.Blue)
+            return true
         end
     end
+    return false
 end
 dwac.setMapSmoke = setMapSmoke
 
@@ -105,7 +112,9 @@ local function setMapIllumination(vector)
         local lat, lon, alt = coord.LOtoLL(vector)
         dwac.writeDebug("Illumination requested: Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt)
         trigger.action.illuminationBomb(vector, dwac.illuminationPower)
+        return true
     end
+    return false
 end
 dwac.setMapIllumination = setMapIllumination
 
@@ -227,13 +236,15 @@ function dwac.dwacEventHandler:onEvent(event)
             if event.idx == panel.idx then
                 local markType = dwac.getMarkerRequest(panel.text)
                 if dwac.enableMapSmoke and markType == dwac.MapRequest.SMOKE then
-                    dwac.setMapSmoke(panel.text, panel.pos)
-                    timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    if dwac.setMapSmoke(panel.text, panel.pos) then
+                        timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    end
                     break
                 elseif dwac.enableMapIllumination and  markType == dwac.MapRequest.ILLUMINATION then
                     panel.pos.y = dwac.mapIlluminationAltitude
-                    dwac.setMapIllumination(panel.pos)
-                    timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    if dwac.setMapIllumination(panel.pos) then
+                        timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    end
                     break
                 end
             end
@@ -257,7 +268,7 @@ local function dump(o)
 end
 dwac.dump = dump
 
---timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + 5)
+trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
 
 dwac.writeDebug("DWAC Active")
