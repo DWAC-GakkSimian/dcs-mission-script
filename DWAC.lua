@@ -18,12 +18,13 @@
     IN THE SOFTWARE.
 ]]
 
+os                      = require "os"
 io                      = require "io"
 lfs                     = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'SavedGames' folder
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.0"
+local version = "0.1.1"
 
 env.info(baseName .. " starting")
 -- ##########################
@@ -41,7 +42,8 @@ dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 -- Properties
 -- ##########################
 if dwac.enableLogging then
-    dwac.logger = io.open(lfs.writedir() .. "Logs/" .. baseName .. ".log", "a+")
+    local _date = os.date("*t")
+    dwac.logger = io.open(lfs.writedir() .. "Logs/" .. baseName .. "_" .. _date.year .. "_" .. _date.month .. "_" .. _date.day .. ".log", "a+")
 end
 dwac.messageDuration = 20 -- seconds
 dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
@@ -124,11 +126,9 @@ end
 dwac.getLogTimeStamp = getLogTimeStamp
 
 local function isFACUnit(_unit)
-    dwac.writeDebug("IsFACUnit() \n" .. _unit:getTypeName())
     if _unit ~= nil then
         for _, _unitName in pairs(dwac.facUnits) do
             if _unit:getTypeName() == _unitName then
-                dwac.writeDebug("_unit.id: " .. _unit:getID() .. " is FAC capable")
                 return true
             end
         end
@@ -146,7 +146,6 @@ end
 dwac.getGroupId = getGroupId
 
 local function addFACFeatures(_unit)
-    dwac.writeDebug("Adding FAC-A features")
     local _groupId = getGroupId(_unit)
     missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
     local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
