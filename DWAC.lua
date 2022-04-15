@@ -26,7 +26,18 @@ local dwac = {}
 local baseName = "DWAC"
 local version = "0.1.1"
 
+
+
 env.info(baseName .. " starting")
+package.path =
+    ''
+    .. lfs.writedir() .. "Scripts/?.lua"
+    .. package.path
+    
+local dwac_faca = _G.require "DWAC_FACA" -- DWAC.lua must reside with this script
+
+
+
 -- ##########################
 -- CONFIGURATION PROPERTIES - Tie them to this table so calling scopes can reference
 -- ##########################
@@ -38,6 +49,10 @@ dwac.enableMapIllumination = true
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 
+
+
+
+
 -- ##########################
 -- Properties
 -- ##########################
@@ -48,15 +63,11 @@ end
 dwac.messageDuration = 20 -- seconds
 dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
 
--- Unit types capable of FAC-A that will receive the F10 menu option
-dwac.facUnits = {
-    "SA342M",
-    "SA342L",
-    "SA342Mistral",
-    "SA342Minigun"
-}
-
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2}
+
+
+
+
 
 -- ##########################
 -- Methods
@@ -125,18 +136,6 @@ local function getLogTimeStamp()
 end
 dwac.getLogTimeStamp = getLogTimeStamp
 
-local function isFACUnit(_unit)
-    if _unit ~= nil then
-        for _, _unitName in pairs(dwac.facUnits) do
-            if _unit:getTypeName() == _unitName then
-                return true
-            end
-        end
-    end
-    return false
-end
-dwac.isFACUnit = isFACUnit
-
 local function getGroupId(_unit)
     if _unit then
         local _group = _unit:getGroup()
@@ -145,59 +144,19 @@ local function getGroupId(_unit)
 end
 dwac.getGroupId = getGroupId
 
-local function addFACFeatures(_unit)
-    local _groupId = getGroupId(_unit)
-    missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
-    local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
-
-    -- Laser Codes
-    missionCommands.addCommandForGroup(_groupId, "Set laser code", _facPath, dwac.setLaserCode, _unit)
-
-    -- Smoke Color
-    local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
-    missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, "red")
-    missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, "orange")
-    missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, "white")
-end
-dwac.addFACFeatures = addFACFeatures
-
-local function setLaserCode(_unit)
-    dwac.writeDebug("setLaserCode() for unit: " .. _unit:getID())
-    local _groupId = dwac.getGroupId(_unit)
-    trigger.action.outTextForGroup(_groupId, "Set laser code for " .. _unit:getPlayerName(), dwac.messageDuration, false)
-end
-dwac.setLaserCode = setLaserCode
-
-local function setFACSmokeColor(color)
-    if color == "red" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac.messageDuration, false)
-    elseif color == "orange" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac.messageDuration, false)
-    elseif color == "white" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac.messageDuration, false)
-    end
-end
-dwac.setFACSmokeColor = setFACSmokeColor
-
 -- highest level DWAC F10 menu addition
 --   add calls to functions which add specific menu features here to keep it clean
 --   REMEMBER to add clean-up to removeF10MenuOptions()
 local function addF10MenuOptions()
     timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + dwac.f10MenuUpdateFrequency)
-
-    for _coalition = coalition.side.RED, coalition.side.BLUE do
-        local _players = coalition.getPlayers(_coalition) -- returns array of units run by players
-        if _players ~= nil then
-            for i = 1, #_players do
-                local _unit = _players[i]
-                if _unit ~= nil then
-                    if dwac.isFACUnit(_unit) then
-                        dwac.addFACFeatures(_unit)
-                    end
-                end
-            end
+    -- FAC-A
+    local _facUnits = dwac_faca.getCurrentFACUnits()
+    if #_facUnits > 0 then
+        dwac.writeDebug("current fac units: " .. #_facUnits)
+        for i=1, #_facUnits do
+            dwac_faca.addFACMenuFeatures(dwac.getGroupId(_facUnits[i]))
         end
-    end
+    end    
 end
 dwac.addF10MenuOptions = addF10MenuOptions
 
@@ -217,6 +176,10 @@ local function missionStopHandler(event)
     end
 end
 dwac.missionStopHandler = missionStopHandler
+
+
+
+
 
 -- ##########################
 -- EVENT HANDLING
@@ -269,6 +232,7 @@ dwac.dump = dump
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
+dwac_faca.doFoo()
 
 dwac.writeDebug("DWAC Active")
 return dwac
