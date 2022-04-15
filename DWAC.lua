@@ -24,7 +24,7 @@ lfs                     = require "lfs" -- lfs.writedir() provided by DCS and po
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.1"
+local version = "0.1.2"
 
 
 
