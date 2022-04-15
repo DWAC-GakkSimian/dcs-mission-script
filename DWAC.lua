@@ -34,8 +34,8 @@ package.path =
     .. lfs.writedir() .. "Scripts/?.lua"
     .. package.path
     
-local dwac_faca = _G.require "DWAC_FACA" -- DWAC.lua must reside with this script
-
+local dwac_util = _G.require "DWAC_UTIL"
+local dwac_faca = _G.require "DWAC_FACA"
 
 
 -- ##########################
@@ -79,6 +79,7 @@ local function writeDebug(debugLog)
     end
 end
 dwac.writeDebug = writeDebug
+dwac_faca.writeDebug = writeDebug
 
 local function getMarkerRequest(requestText)
     isSmokeRequest = requestText:match("^-smoke")
@@ -136,13 +137,6 @@ local function getLogTimeStamp()
 end
 dwac.getLogTimeStamp = getLogTimeStamp
 
-local function getGroupId(_unit)
-    if _unit then
-        local _group = _unit:getGroup()
-        return _group:getID()
-    end
-end
-dwac.getGroupId = getGroupId
 
 -- highest level DWAC F10 menu addition
 --   add calls to functions which add specific menu features here to keep it clean
@@ -154,7 +148,7 @@ local function addF10MenuOptions()
     if #_facUnits > 0 then
         dwac.writeDebug("current fac units: " .. #_facUnits)
         for i=1, #_facUnits do
-            dwac_faca.addFACMenuFeatures(dwac.getGroupId(_facUnits[i]))
+            dwac_faca.addFACMenuFeatures(_facUnits[i])
         end
     end    
 end
@@ -233,6 +227,7 @@ dwac.dump = dump
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
 dwac_faca.doFoo()
+dwac_util.doFoo()
 
 dwac.writeDebug("DWAC Active")
 return dwac

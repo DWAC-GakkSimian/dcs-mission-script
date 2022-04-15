@@ -16,6 +16,8 @@
 
 local dwac_faca = {}
 
+local dwac_util = _G.require "DWAC_UTIL"
+
 -- ##########################
 -- Properties
 -- ##########################
@@ -52,33 +54,37 @@ dwac_faca.pruneFACUnits = pruneFACUnits
 -- Methods
 -- ##########################
 
-local function addFACMenuFeatures(groupId)
-    missionCommands.removeItemForGroup(groupId, {"FAC-A"}) -- clears menu at root for this feature
-    local _facPath = missionCommands.addSubMenuForGroup(groupId, "FAC-A")
+local function addFACMenuFeatures(_unit)
+    local _groupId = dwac_util.getGroupId(_unit)
+    missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
+    local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
 
     -- Laser Codes
-    missionCommands.addCommandForGroup(groupId, "Set laser code", _facPath, dwac_faca.setLaserCode, groupId)
+    missionCommands.addCommandForGroup(_groupId, "Set laser code", _facPath, dwac_faca.setLaserCode, _unit)
 
     -- Smoke Color
-    local _smokePath = missionCommands.addSubMenuForGroup(groupId, "Set smoke color", _facPath)
-    missionCommands.addCommandForGroup(groupId, "Red", _smokePath, dwac_faca.setFACSmokeColor, "red")
-    missionCommands.addCommandForGroup(groupId, "Orange", _smokePath, dwac_faca.setFACSmokeColor, "orange")
-    missionCommands.addCommandForGroup(groupId, "White", _smokePath, dwac_faca.setFACSmokeColor, "white")
+    local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
+    missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac_faca.setFACSmokeColor, "red")
+    missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac_faca.setFACSmokeColor, "orange")
+    missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac_faca.setFACSmokeColor, "white")
 end
 dwac_faca.addFACMenuFeatures = addFACMenuFeatures
 
-local function setLaserCode(groupId)
-    trigger.action.outTextForGroup(groupId, "Set laser code for group " .. groupId, 5, false)
+local function setLaserCode(_unit)
+    dwac_faca.writeDebug("setLaserCode() for unit: " .. _unit:getID())
+    local _groupId = dwac_util.getGroupId(_unit)
+    trigger.action.outTextForGroup(_groupId, "Set laser code for " .. _unit:getPlayerName(), 5, false)
 end
 dwac_faca.setLaserCode = setLaserCode
 
-local function setFACSmokeColor(groupId, color)
+local function setFACSmokeColor(_unit, color)
+    local _groupId = dwac_util.getGroupId(_unit)
     if color == "red" then
-        trigger.action.outTextForGroup(groupId, "Smoke set to " .. color, 5, false)
+        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
     elseif color == "orange" then
-        trigger.action.outTextForGroup(groupId, "Smoke set to " .. color, 5, false)
+        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
     elseif color == "white" then
-        trigger.action.outTextForGroup(groupId, "Smoke set to " .. color, 5, false)
+        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
     end
 end
 dwac_faca.setFACSmokeColor = setFACSmokeColor
@@ -118,6 +124,7 @@ dwac_faca.getCurrentFACUnits = getCurrentFACUnits
 
 local function doFoo()
     trigger.action.outText("DWAC_FACA loaded", 5, false)
+    dwac_util.doFoo()
 end
 dwac_faca.doFoo = doFoo
 
