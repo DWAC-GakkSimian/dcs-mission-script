@@ -61,6 +61,7 @@ if dwac.enableLogging then
     dwac.logger = io.open(lfs.writedir() .. "Logs/" .. baseName .. "_" .. _date.year .. "_" .. _date.month .. "_" .. _date.day .. ".log", "a+")
 end
 dwac.messageDuration = 20 -- seconds
+dwac_faca.messageDuration = dwac.messageDuration -- pass the display time to FACA script
 dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2}
@@ -144,11 +145,10 @@ dwac.getLogTimeStamp = getLogTimeStamp
 local function addF10MenuOptions()
     timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + dwac.f10MenuUpdateFrequency)
     -- FAC-A
-    local _facUnits = dwac_faca.getCurrentFACUnits()
-    if #_facUnits > 0 then
-        dwac.writeDebug("current fac units: " .. #_facUnits)
-        for i=1, #_facUnits do
-            dwac_faca.addFACMenuFeatures(_facUnits[i])
+    local _units = dwac_faca.getCurrentFACCapableUnits()
+    if #_units > 0 then
+        for i=1, #_units do
+            dwac_faca.addFACMenuFeatures(_units[i])
         end
     end    
 end
@@ -209,25 +209,12 @@ function dwac.dwacEventHandler:onEvent(event)
 end
 world.addEventHandler(dwac.dwacEventHandler)
 
--- useful for debugging
-local function dump(o)
-   if type(o) == 'table' then
-      local s = '{ '
-      for k,v in pairs(o) do
-         if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. dump(v) .. ','
-      end
-      return s .. '} '
-   else
-      return tostring(o)
-   end
-end
-dwac.dump = dump
+
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
 dwac_faca.doFoo()
-dwac_util.doFoo()
+--dwac_util.doFoo()
 
 dwac.writeDebug("DWAC Active")
 return dwac

@@ -19,8 +19,28 @@ local dwac_faca = {}
 local dwac_util = _G.require "DWAC_UTIL"
 
 -- ##########################
+-- Meta Classes
+-- ##########################
+FacUnit = {}
+function FacUnit:new (baseUnit, smokeColor, laserCode)
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+    if baseUnit == nil then
+        error("Nil Unit provided to FacUnit constructor")
+    end
+    o.base = baseUnit
+    o.smokeColor = smokeColor or dwac_faca.smokeColors[trigger.smokeColor.Red]
+    o.laserCode = laserCode or dwac_faca.laserCodes.One
+    return o
+end
+
+
+-- ##########################
 -- Properties
 -- ##########################
+
+dwac_faca.messageDuration = 5
 
 -- Unit types capable of FAC-A that will receive the F10 menu option
 dwac_faca.facCapableUnits = {
@@ -29,6 +49,23 @@ dwac_faca.facCapableUnits = {
     "SA342Mistral",
     "SA342Minigun"
 }
+
+-- reverse of trigger.smokeColor
+dwac_faca.smokeColors = {
+    [0] = "Green",
+    [1] = "Red",
+    [2] = "White",
+    [3] = "Orange",
+    [4] = "Blue"
+}
+
+dwac_faca.laserCodes = {
+    One = 1688,
+    Two = 1588,
+    Three = 1488,
+    Four = 1337
+}
+
 -- collection of FAC-A capable units operating in-game
 dwac_faca.facUnits = {}
 -- add method of removing fac units no longer in use by a player
@@ -48,44 +85,74 @@ end
 dwac_faca.pruneFACUnits = pruneFACUnits
 
 
-
-
 -- ##########################
 -- Methods
 -- ##########################
 
 local function addFACMenuFeatures(_unit)
-    local _groupId = dwac_util.getGroupId(_unit)
-    missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
-    local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
+    dwac_faca.writeDebug("addFACMenuFeatures()_unit: " .. dwac_util.dump(_unit))
+    -- Add the unit for tracking if needed
+    local _facUnit = FacUnit:new(_unit)
+    local _existing = dwac_faca.getFACUnit(_facUnit)
+    if not _existing then
+        dwac_faca.addFACUnit(_facUnit)
+        local _groupId = dwac_util.getGroupId(_facUnit.base)
+        --missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
+        local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
 
-    -- Laser Codes
-    missionCommands.addCommandForGroup(_groupId, "Set laser code", _facPath, dwac_faca.setLaserCode, _unit)
+        -- Laser Codes
+        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", _facPath)
+        missionCommands.addCommandForGroup(_groupId, dwac_faca.laserCodes.One, _laserPath, dwac_faca.setLaserCode, {_facUnit, dwac_faca.laserCodes.One})
+        missionCommands.addCommandForGroup(_groupId, dwac_faca.laserCodes.Two, _laserPath, dwac_faca.setLaserCode, {_facUnit, dwac_faca.laserCodes.Two})
+        missionCommands.addCommandForGroup(_groupId, dwac_faca.laserCodes.Three, _laserPath, dwac_faca.setLaserCode, {_facUnit, dwac_faca.laserCodes.Three})
+        missionCommands.addCommandForGroup(_groupId, dwac_faca.laserCodes.Four, _laserPath, dwac_faca.setLaserCode, {_facUnit, dwac_faca.laserCodes.Four})
 
-    -- Smoke Color
-    local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
-    missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac_faca.setFACSmokeColor, "red")
-    missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac_faca.setFACSmokeColor, "orange")
-    missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac_faca.setFACSmokeColor, "white")
+        -- Smoke Color
+        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
+        missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac_faca.setFACSmokeColor, {_facUnit, dwac_faca.smokeColors[trigger.smokeColor.Red]})
+        missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac_faca.setFACSmokeColor, {_facUnit, dwac_faca.smokeColors[trigger.smokeColor.Orange]})
+        missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac_faca.setFACSmokeColor, {_facUnit, dwac_faca.smokeColors[trigger.smokeColor.White]})
+
+        -- Current Settings
+        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", _facPath, dwac_faca.getCurrentSettings, {_facUnit})
+    end
 end
 dwac_faca.addFACMenuFeatures = addFACMenuFeatures
 
-local function setLaserCode(_unit)
-    dwac_faca.writeDebug("setLaserCode() for unit: " .. _unit:getID())
-    local _groupId = dwac_util.getGroupId(_unit)
-    trigger.action.outTextForGroup(_groupId, "Set laser code for " .. _unit:getPlayerName(), 5, false)
+local function getCurrentSettings(args)
+    dwac_faca.writeDebug("getCurrentSettings()")
+    local _facUnit = args[1]
+    dwac_faca.writeDebug("getCurrentSettings()_facUnit: " .. dwac_util.dump(_facUnit))
+    --local _facUnit = dwac_faca.getFACUnit(_facUnit)
+    local _groupId = dwac_util.getGroupId(_facUnit.base)
+    trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac_faca.messageDuration, true)
+end
+dwac_faca.getCurrentSettings = getCurrentSettings
+
+local function setLaserCode(args) -- args: {facUnit, code}
+    dwac_faca.writeDebug("setLaserCode()")
+    args[1].laserCode = args[2]
+    --dwac_faca.writeDebug("setLaserCode()_facUnit: " .. dwac_util.dump(args[1]))
+    dwac_faca.updateFACUnit(args[1])
 end
 dwac_faca.setLaserCode = setLaserCode
 
-local function setFACSmokeColor(_unit, color)
-    local _groupId = dwac_util.getGroupId(_unit)
-    if color == "red" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
-    elseif color == "orange" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
-    elseif color == "white" then
-        trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, 5, false)
-    end
+
+local function setFACSmokeColor(args) -- args: {facUnit, color}
+    dwac_faca.writeDebug("setFACSmokeColor()")
+    local _facUnit = args[1]
+    local color = args[2]
+    _facUnit.smokeColor = args[2]
+    dwac_faca.updateFACUnit(_facUnit)
+    --local _groupId = dwac_util.getGroupId(_facUnit.base)
+
+    -- if color.lower() == "red" then
+    --     trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac_faca.messageDuration, false)
+    -- elseif color == "orange" then
+    --     trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac_faca.messageDuration, false)
+    -- elseif color == "white" then
+    --     trigger.action.outTextForGroup(_groupId, "Smoke set to " .. color, dwac_faca.messageDuration, false)
+    -- end
 end
 dwac_faca.setFACSmokeColor = setFACSmokeColor
 
@@ -102,7 +169,7 @@ end
 dwac_faca.isFACUnit = isFACUnit
 
 -- Extracts all current player units that are FAC-A capable
-local function getCurrentFACUnits()
+local function getCurrentFACCapableUnits()
     local reply = {}
     for _coalition = coalition.side.RED, coalition.side.BLUE do
         local _players = coalition.getPlayers(_coalition) -- returns array of units run by players
@@ -119,12 +186,50 @@ local function getCurrentFACUnits()
     end
     return reply
 end
-dwac_faca.getCurrentFACUnits = getCurrentFACUnits
+dwac_faca.getCurrentFACCapableUnits = getCurrentFACCapableUnits
 
+local function addFACUnit(_facUnit)
+   -- dwac_faca.writeDebug("addFACUnit()")
+    if _facUnit then
+        local existingFacUnit = dwac_faca.getFACUnit(_facUnit)
+        if existingFacUnit == nil then
+            table.insert(dwac_faca.facUnits, _facUnit)
+        end
+    end
+end
+dwac_faca.addFACUnit = addFACUnit
+
+local function updateFACUnit(_facUnit)
+    dwac_faca.writeDebug("updateFACUnit()")
+    -- dwac_faca.writeDebug("_facUnit: " .. dwac_util.dump(_facUnit))
+    for i, _value in ipairs(dwac_faca.facUnits) do
+        local valId = _value.base:getID()
+        local facId = _facUnit.base:getID()
+        -- dwac_faca.writeDebug("updateFACUnit()._value.base:getID(): " .. valId)
+        -- dwac_faca.writeDebug("updateFACUnit()._facUnit.base:getID(): " .. facId)
+        if valId == facId then
+            table.insert(dwac_faca.facUnits, i, _facUnit)
+            break
+        end
+    end
+end
+dwac_faca.updateFACUnit = updateFACUnit
+
+local function getFACUnit(_newFacUnit)
+    --dwac_faca.writeDebug("getFACUnit()")
+    for _, _facUnit in pairs(dwac_faca.facUnits) do
+        if _facUnit then
+            if _facUnit.base:getID() == _newFacUnit.base:getID() then
+                return _facUnit
+            end
+        end
+    end    
+end
+dwac_faca.getFACUnit = getFACUnit
 
 local function doFoo()
-    trigger.action.outText("DWAC_FACA loaded", 5, false)
-    dwac_util.doFoo()
+    trigger.action.outText("DWAC_FACA loaded", dwac_faca.messageDuration, false)
+    --dwac_util.doFoo()
 end
 dwac_faca.doFoo = doFoo
 
