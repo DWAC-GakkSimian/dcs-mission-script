@@ -9,4 +9,6 @@ Script functions for use by Dire Wolves Air Cavalry (DWAC)
 		Places smoke at the marker location
     -flare
         Places an illumination bomb at the marker location and at a configured altitude (700m default)
+    -version
+        Displays the version of DWAC script
 ~~~

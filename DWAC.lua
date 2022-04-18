@@ -31,7 +31,7 @@ local version = "0.1.4"
 env.info(baseName .. " starting")
 package.path =
     ''
-    .. lfs.writedir() .. "Scripts/?.lua"
+    .. lfs.writedir() .. "Scripts/?.lua;"
     .. package.path
     
 local dwac_util = _G.require "DWAC_UTIL"
@@ -64,7 +64,7 @@ dwac.messageDuration = 20 -- seconds
 dwac_faca.messageDuration = dwac.messageDuration -- pass the display time to FACA script
 dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
 
-dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2}
+dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
 
 
 
@@ -83,14 +83,19 @@ dwac.writeDebug = writeDebug
 dwac_faca.writeDebug = writeDebug
 
 local function getMarkerRequest(requestText)
-    isSmokeRequest = requestText:match("^-smoke")
+    local isSmokeRequest = requestText:match("^-smoke")
     if isSmokeRequest then
         return dwac.MapRequest.SMOKE
     end
 
-    isIllumination = requestText:match("^-flare%s*$")
+    local isIllumination = requestText:match("^-flare%s*$")
     if isIllumination then
         return dwac.MapRequest.ILLUMINATION
+    end
+
+    local isVersionRequest = requestText:match("^-version")
+    if isVersionRequest then
+        return dwac.MapRequest.VERSION
     end
 end
 dwac.getMarkerRequest = getMarkerRequest
@@ -132,6 +137,11 @@ local function setMapIllumination(vector)
     return false
 end
 dwac.setMapIllumination = setMapIllumination
+
+local function showVersion()
+    trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
+end
+dwac.showVersion = showVersion
 
 local function getLogTimeStamp()
     return os.date("%H:%M:%S") .. " - " .. baseName .. ": "
@@ -201,6 +211,10 @@ function dwac.dwacEventHandler:onEvent(event)
                     if dwac.setMapIllumination(panel.pos) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
+                    break
+                elseif markType == dwac.MapRequest.VERSION then
+                    dwac.showVersion()
+                    timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     break
                 end
             end
