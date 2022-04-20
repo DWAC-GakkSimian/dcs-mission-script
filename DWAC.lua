@@ -24,14 +24,27 @@ lfs                     = require "lfs" -- lfs.writedir() provided by DCS and po
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.4"
+local version = "0.1.5"
 
 
 
 env.info(baseName .. " starting")
+guiBindPath = './dxgui/bind/?.lua;' .. 
+              './dxgui/loader/?.lua;' .. 
+              './dxgui/skins/skinME/?.lua;' .. 
+              './dxgui/skins/common/?.lua;'
 package.path =
     ''
-    .. lfs.writedir() .. "Scripts/?.lua;"
+    .. guiBindPath
+	.. './MissionEditor/?.lua;'
+    .. './MissionEditor/modules/?.lua;'	
+    .. lfs.writedir() .. "Scripts/?.lua"
+    .. './Scripts/?.lua;'
+    .. './LuaSocket/?.lua;'
+	.. './Scripts/UI/?.lua;'
+	.. './Scripts/UI/Multiplayer/?.lua;'
+	.. './Scripts/DemoScenes/?.lua;'
+	.. './MAC_Gui/?.lua;'
     .. package.path
     
 local dwac_util = _G.require "DWAC_UTIL"
@@ -222,7 +235,6 @@ function dwac.dwacEventHandler:onEvent(event)
     end
 end
 world.addEventHandler(dwac.dwacEventHandler)
-
 
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
