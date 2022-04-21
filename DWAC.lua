@@ -4,7 +4,8 @@
             Usage: On the F10 map, place a comment circle with text of "-smoke;<color>" (red|orange|green|white|blue) and minimize
         - ILLUMINATION: Map targeted
             Usage: On the F10 map, place a comment circle with text of "-flare" and minimize
-
+        - VERSION: Map activated
+            Usage: On the F10 map, place a comment circle with text of "-version" to see the current version of DWAC
 
     The MIT License (MIT)
     Copyright © 2022 gakksimian@gmail.com
@@ -68,6 +69,7 @@ local function dump(o)
 
 
 --#region FAC-A
+
 -- ##########################
 -- Meta Classes
 -- ##########################
@@ -97,17 +99,18 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.onStation = false
     o.currentTarget = {}
     o.targets = {}
-    o.stationMenuPath = {}
 
     return o
 end
-function FacUnit:goOnStation()
+function FacUnit:goOnStation(o)
     dwac.writeDebug("Go ON station")
     self.onStation = true
+    dwac.updateFACUnit(self)
 end
-function FacUnit:goOffStation()
+function FacUnit:goOffStation(o)
     dwac.writeDebug("Go OFF station")
     self.onStation = false
+    dwac.updateFACUnit(self)
 end
 
 
@@ -159,6 +162,7 @@ local function pruneFACUnits()
 end
 dwac.pruneFACUnits = pruneFACUnits
 
+dwac.facMenuDB = {}
 
 -- ##########################
 -- Methods
@@ -166,50 +170,70 @@ dwac.pruneFACUnits = pruneFACUnits
 
 local function addFACMenuFeatures(_unit)
     -- Add the unit for tracking if needed
-    local _facUnit = FacUnit:new(_unit)
-    local _existing = dwac.getFACUnit(_facUnit)
-    local _groupId = dwac.getGroupId(_facUnit.base)
-    
-    if _existing then
-        _facUnit = _existing
-        local _onStationPath = _facUnit.stationMenuPath
-        missionCommands.removeItemForGroup(_groupId, _onStationPath)
-        if _facUnit.onStation then
-            _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go OFF Station", _facPath, _facUnit.goOffStation)
-            missionCommands.addSubMenuForGroup(_groupid, "List targets", _facPath)
-            missionCommands.addCommandForGroup(_groupId, "Smoke target", _facPath, _facUnit.smokeTarget)
-            missionCommands.addCommandForGroup(_groupId, "Laze target", _facPath, _facUnit.lazeTarget)
-            missionCommands.addCommandForGroup(_groupId, "Call artillery", _facPath, _facUnit.callArty)
+    if not _unit then
+        return
+    end
+    local _unitId = _unit:getID()
+    if not dwac.facUnits[_unitId] then
+        dwac.facUnits[_unitId] = FacUnit:new(_unit)
+    end
+    local _groupId = dwac.getGroupId(dwac.facUnits[_unitId].base)
+    if not dwac.facMenuDB[_groupId] then
+        dwac.facMenuDB[_groupId] = {}
+    end
+
+    dwac.writeDebug("addFACMenuFeatures: " .. dwac.dump(dwac.facUnits[_unitId]))
+
+    local _FACA = "FAC-A"
+    local _onStation = "Go ON Station"
+    local _offStation = "Go OFF Station"
+
+    -- local _unitMenu = dwac.facMenuDB[_groupId]
+    -- if not _unitMenu then
+    --     _unitMenu = {}
+    --     dwac.facMenuDB[_groupId] = _unitMenu
+    -- end
+
+    dwac.writeDebug("Existing: " .. dwac.dump(dwac.facMenuDB[_groupId]))
+    if dwac.facMenuDB[_groupId]["StationPath"] then
+        missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId]["StationPath"])
+        if dwac.facUnits[_unitId].onStation then
+            dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, _offStation, dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
+            -- missionCommands.addSubMenuForGroup(_groupid, "List targets",  _existing.facMenuPath)
+            -- missionCommands.addCommandForGroup(_groupId, "Smoke target",  _existing.facMenuPath, _existing.smokeTarget)
+            -- missionCommands.addCommandForGroup(_groupId, "Laze target",  _existing.facMenuPath, _existing.lazeTarget)
+            -- missionCommands.addCommandForGroup(_groupId, "Call artillery",  _existing.facMenuPath, _existing.callArty)
         else
-            _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go ON Station", _facPath, _facUnit.goOnStation)
+            dwac.writeDebug("OffStation: " .. dwac.dump(dwac.facUnits[_unitId]))
+            dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, _onStation,  dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
         end
-        _facUnit.stationMenuPath = _onStationPath
-        dwac.updateFACUnit(_facUnit)
+        --dwac.updateFACUnit(_existing)
     else
-        dwac.addFACUnit(_facUnit)
+        --dwac.updateFACUnit(_facUnit)
         --missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
-        local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
+        dwac.facMenuDB[_groupId]["FacPath"] = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
 
         -- Laser Codes
-        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", _facPath)
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.One, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.One})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Two, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Two})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Three, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Three})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Four, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Four})
+        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", dwac.facMenuDB[_groupId]["FacPath"])
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.One, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.One})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Two, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Two})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Three, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Three})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Four, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Four})
 
         -- Smoke Color
-        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
-        missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.Red]})
-        missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.Orange]})
-        missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.White]})
+        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", dwac.facMenuDB[_groupId]["FacPath"])
+        missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Red]})
+        missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Orange]})
+        missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.White]})
 
         -- Current Settings
-        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", _facPath, dwac.getCurrentSettings, {_facUnit})
+        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", dwac.facMenuDB[_groupId]["FacPath"], dwac.getCurrentSettings, {dwac.facUnits[_unitId]})
 
         -- Station
-        local _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go ON Station", _facPath, _facUnit.goOnStation)
-        _facUnit.stationMenuPath = _onStationPath
-        dwac.updateFACUnit(_facUnit)
+        dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, "Go ON Station", dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOnStation)
+        --_facUnit.facMenuPath = _facPath
+        --_facUnit.stationMenuPath = _onStationPath
+        --dwac.updateFACUnit(_facUnit)
     end
 end
 dwac.addFACMenuFeatures = addFACMenuFeatures
@@ -218,7 +242,6 @@ local function getCurrentSettings(args)
     dwac.writeDebug("getCurrentSettings()")
     local _facUnit = args[1]
     dwac.writeDebug("getCurrentSettings()_facUnit: " .. dwac.dump(_facUnit))
-    --local _facUnit = dwac.getFACUnit(_facUnit)
     local _groupId = dwac.getGroupId(_facUnit.base)
     trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, true)
 end
@@ -227,7 +250,6 @@ dwac.getCurrentSettings = getCurrentSettings
 local function setLaserCode(args) -- args: {facUnit, code}
     dwac.writeDebug("setLaserCode()")
     args[1].laserCode = args[2]
-    --dwac.writeDebug("setLaserCode()_facUnit: " .. dwac.dump(args[1]))
     dwac.updateFACUnit(args[1])
 end
 dwac.setLaserCode = setLaserCode
@@ -240,7 +262,7 @@ local function setFACSmokeColor(args) -- args: {facUnit, color}
 end
 dwac.setFACSmokeColor = setFACSmokeColor
 
-local function isFACUnit(_unit)
+local function isFACCapable(_unit)
     if _unit ~= nil then
         for _, _unitName in pairs(dwac.facCapableUnits) do
             if _unit:getTypeName() == _unitName then
@@ -250,7 +272,7 @@ local function isFACUnit(_unit)
     end
     return false
 end
-dwac.isFACUnit = isFACUnit
+dwac.isFACCapable = isFACCapable
 
 -- Extracts all current player units that are FAC-A capable
 local function getCurrentFACCapableUnits()
@@ -261,7 +283,7 @@ local function getCurrentFACCapableUnits()
             for i = 1, #_players do
                 local _unit = _players[i]
                 if _unit ~= nil then
-                    if dwac.isFACUnit(_unit) then
+                    if dwac.isFACCapable(_unit) then
                         table.insert(reply, _unit)
                     end
                 end
@@ -272,47 +294,24 @@ local function getCurrentFACCapableUnits()
 end
 dwac.getCurrentFACCapableUnits = getCurrentFACCapableUnits
 
-local function addFACUnit(_facUnit)
-   -- dwac.writeDebug("addFACUnit()")
-    if _facUnit then
-        local existingFacUnit = dwac.getFACUnit(_facUnit)
-        if existingFacUnit == nil then
-            table.insert(dwac.facUnits, _facUnit)
-        end
-    end
-end
-dwac.addFACUnit = addFACUnit
-
 local function updateFACUnit(_facUnit)
     dwac.writeDebug("updateFACUnit()")
-    for i, _value in ipairs(dwac.facUnits) do
-        local valId = _value.base:getID()
-        local facId = _facUnit.base:getID()
-        if valId == facId then
-            table.insert(dwac.facUnits, i, _facUnit)
-            break
+    dwac.writeDebug("Incoming facUnit: " .. dwac.dump(_facUnit))
+    if _facUnit then
+        if _facUnit.base then
+            dwac.writeDebug("UpdateFACUnit: " .. dwac.dump(_facUnit))
+            dwac.facUnits[_facUnit.base:getID()] = _facUnit
         end
     end
+    dwac.writeDebug("facUnits: " .. dwac.dump(dwac.facUnits))
 end
 dwac.updateFACUnit = updateFACUnit
 
-local function getFACUnit(_newFacUnit)
-    --dwac.writeDebug("getFACUnit()")
-    for _, _facUnit in pairs(dwac.facUnits) do
-        if _facUnit then
-            if _facUnit.base:getID() == _newFacUnit.base:getID() then
-                return _facUnit
-            end
-        end
-    end    
-end
-dwac.getFACUnit = getFACUnit
-
 local function doFoo()
     trigger.action.outText("DWAC loaded", dwac.messageDuration, false)
-    --dwac.doFoo()
 end
 dwac.doFoo = doFoo
+
 --#endregion
 
 
@@ -344,7 +343,6 @@ local function writeDebug(debugLog)
         dwac.logger:write(dwac.getLogTimeStamp() .. debugLog .. "\n")
     end
 end
-dwac.writeDebug = writeDebug
 dwac.writeDebug = writeDebug
 
 local function getMarkerRequest(requestText)
@@ -422,9 +420,9 @@ local function addF10MenuOptions()
     timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + dwac.f10MenuUpdateFrequency)
     -- FAC-A
     local _units = dwac.getCurrentFACCapableUnits()
-    if #_units > 0 then
-        for i = 1, #_units do
-            dwac.addFACMenuFeatures(_units[i])
+    if _units then
+        for _, _unit in pairs(_units) do
+            dwac.addFACMenuFeatures(_unit)
         end
     end
 end
@@ -487,8 +485,6 @@ world.addEventHandler(dwac.dwacEventHandler)
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
-dwac.doFoo()
---dwac.doFoo()
 
 --#endregion
 
