@@ -38,6 +38,10 @@ dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
+dwac.messageDuration = 20 -- seconds
+dwac.f10MenuUpdateFrequency = 1 -- F10 menu refresh rate
+
+dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
 
 --#endregion
 
@@ -97,20 +101,49 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.smokeColor = smokeColor or dwac.smokeColors[trigger.smokeColor.Red]
     o.laserCode = laserCode or dwac.laserCodes.One
     o.onStation = false
-    o.currentTarget = {}
+    o.currentTarget = nil
     o.targets = {}
+    o.noTargetText = "No target selected"
 
     return o
 end
-function FacUnit:goOnStation(o)
-    dwac.writeDebug("Go ON station")
+function FacUnit:goOnStation()
     self.onStation = true
     dwac.updateFACUnit(self)
 end
-function FacUnit:goOffStation(o)
-    dwac.writeDebug("Go OFF station")
+function FacUnit:goOffStation()
     self.onStation = false
     dwac.updateFACUnit(self)
+end
+function FacUnit:smokeTarget()
+    dwac.writeDebug("Smoke Target: ")
+    if self.currentTarget then
+    else
+        local groupId = dwac.getGroupId(self.base)
+        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+    end
+    --self.onStation = false
+    --dwac.updateFACUnit(self)
+end
+function FacUnit:lazeTarget()
+    dwac.writeDebug("Laze Target: ")
+    if self.currentTarget then
+    else
+        local groupId = dwac.getGroupId(self.base)
+        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+    end
+    -- self.onStation = false
+    -- dwac.updateFACUnit(self)
+end
+function FacUnit:callArty()
+    dwac.writeDebug("Pound Target: ")
+    if self.currentTarget then
+    else
+        local groupId = dwac.getGroupId(self.base)
+        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+    end
+    -- self.onStation = false
+    -- dwac.updateFACUnit(self)
 end
 
 
@@ -182,73 +215,89 @@ local function addFACMenuFeatures(_unit)
         dwac.facMenuDB[_groupId] = {}
     end
 
-    dwac.writeDebug("addFACMenuFeatures: " .. dwac.dump(dwac.facUnits[_unitId]))
-
     local _FACA = "FAC-A"
     local _onStation = "Go ON Station"
     local _offStation = "Go OFF Station"
+    local _facPath = "FacPath"
+    local _stationPath = "StationPath"
+    local _listTargetPath = "ListTargetPath"
+    local _smokeTargetPath = "SmokeTargetPath"
+    local _lazeTargetPath = "LazeTargetPath"
+    local _artyTargetPath = "ArtyTargetPath"
 
-    -- local _unitMenu = dwac.facMenuDB[_groupId]
-    -- if not _unitMenu then
-    --     _unitMenu = {}
-    --     dwac.facMenuDB[_groupId] = _unitMenu
-    -- end
-
-    dwac.writeDebug("Existing: " .. dwac.dump(dwac.facMenuDB[_groupId]))
-    if dwac.facMenuDB[_groupId]["StationPath"] then
-        missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId]["StationPath"])
+    if dwac.facMenuDB[_groupId][_stationPath] then
+        missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])  
         if dwac.facUnits[_unitId].onStation then
-            dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, _offStation, dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
-            -- missionCommands.addSubMenuForGroup(_groupid, "List targets",  _existing.facMenuPath)
-            -- missionCommands.addCommandForGroup(_groupId, "Smoke target",  _existing.facMenuPath, _existing.smokeTarget)
-            -- missionCommands.addCommandForGroup(_groupId, "Laze target",  _existing.facMenuPath, _existing.lazeTarget)
-            -- missionCommands.addCommandForGroup(_groupId, "Call artillery",  _existing.facMenuPath, _existing.callArty)
-        else
-            dwac.writeDebug("OffStation: " .. dwac.dump(dwac.facUnits[_unitId]))
-            dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, _onStation,  dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
+            dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _offStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
+            
+                -- loop target collection 
+            --if dwac.facUnits[_unitId].currentTarget then
+            if not dwac.facMenuDB[_groupId][_listTargetPath] then
+                dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
+            end
+            if not dwac.facMenuDB[_groupId][_smokeTargetPath] then
+                dwac.facMenuDB[_groupId][_smokeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Smoke target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].smokeTarget, dwac.facUnits[_unitId])
+            end
+            if not dwac.facMenuDB[_groupId][_lazeTargetPath] then
+                dwac.facMenuDB[_groupId][_lazeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Laze target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].lazeTarget, dwac.facUnits[_unitId])
+            end
+            if not dwac.facMenuDB[_groupId][_artyTargetPath] then
+                dwac.facMenuDB[_groupId][_artyTargetPath] = missionCommands.addCommandForGroup(_groupId, "Call artillery",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].callArty, dwac.facUnits[_unitId])
+            end
+            --end
+        else 
+            if dwac.facMenuDB[_groupId][_listTargetPath] then
+                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
+                dwac.facMenuDB[_groupId][_listTargetPath] = nil
+            end
+            if dwac.facMenuDB[_groupId][_smokeTargetPath] then
+                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_smokeTargetPath])
+                dwac.facMenuDB[_groupId][_smokeTargetPath] = nil
+            end
+            if dwac.facMenuDB[_groupId][_lazeTargetPath] then
+                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_lazeTargetPath])
+                dwac.facMenuDB[_groupId][_lazeTargetPath] = nil
+            end
+            if dwac.facMenuDB[_groupId][_artyTargetPath] then
+                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_artyTargetPath])
+                dwac.facMenuDB[_groupId][_artyTargetPath] = nil
+            end
+            dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation,  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
         end
-        --dwac.updateFACUnit(_existing)
     else
-        --dwac.updateFACUnit(_facUnit)
-        --missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
-        dwac.facMenuDB[_groupId]["FacPath"] = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
+        dwac.facMenuDB[_groupId][_facPath] = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
 
         -- Laser Codes
-        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", dwac.facMenuDB[_groupId]["FacPath"])
+        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", dwac.facMenuDB[_groupId][_facPath])
         missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.One, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.One})
         missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Two, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Two})
         missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Three, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Three})
         missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Four, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Four})
 
         -- Smoke Color
-        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", dwac.facMenuDB[_groupId]["FacPath"])
+        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", dwac.facMenuDB[_groupId][_facPath])
         missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Red]})
         missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Orange]})
         missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.White]})
 
         -- Current Settings
-        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", dwac.facMenuDB[_groupId]["FacPath"], dwac.getCurrentSettings, {dwac.facUnits[_unitId]})
+        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", dwac.facMenuDB[_groupId][_facPath], dwac.getCurrentSettings, {dwac.facUnits[_unitId]})
 
         -- Station
-        dwac.facMenuDB[_groupId]["StationPath"] = missionCommands.addCommandForGroup(_groupId, "Go ON Station", dwac.facMenuDB[_groupId]["FacPath"], dwac.facUnits[_unitId].goOnStation)
-        --_facUnit.facMenuPath = _facPath
-        --_facUnit.stationMenuPath = _onStationPath
-        --dwac.updateFACUnit(_facUnit)
+        dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
+        dwac.writeDebug("FAC User: " .. _unit:getPlayerName() .. ". Menu: " .. dwac.dump(dwac.facMenuDB[_groupId]))
     end
 end
 dwac.addFACMenuFeatures = addFACMenuFeatures
 
 local function getCurrentSettings(args)
-    dwac.writeDebug("getCurrentSettings()")
     local _facUnit = args[1]
-    dwac.writeDebug("getCurrentSettings()_facUnit: " .. dwac.dump(_facUnit))
     local _groupId = dwac.getGroupId(_facUnit.base)
     trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, true)
 end
 dwac.getCurrentSettings = getCurrentSettings
 
 local function setLaserCode(args) -- args: {facUnit, code}
-    dwac.writeDebug("setLaserCode()")
     args[1].laserCode = args[2]
     dwac.updateFACUnit(args[1])
 end
@@ -256,7 +305,6 @@ dwac.setLaserCode = setLaserCode
 
 
 local function setFACSmokeColor(args) -- args: {facUnit, color}
-    dwac.writeDebug("setFACSmokeColor()")
     args[1].smokeColor = args[2]
     dwac.updateFACUnit(args[1])
 end
@@ -295,15 +343,11 @@ end
 dwac.getCurrentFACCapableUnits = getCurrentFACCapableUnits
 
 local function updateFACUnit(_facUnit)
-    dwac.writeDebug("updateFACUnit()")
-    dwac.writeDebug("Incoming facUnit: " .. dwac.dump(_facUnit))
     if _facUnit then
         if _facUnit.base then
-            dwac.writeDebug("UpdateFACUnit: " .. dwac.dump(_facUnit))
             dwac.facUnits[_facUnit.base:getID()] = _facUnit
         end
     end
-    dwac.writeDebug("facUnits: " .. dwac.dump(dwac.facUnits))
 end
 dwac.updateFACUnit = updateFACUnit
 
@@ -328,11 +372,7 @@ if dwac.enableLogging then
         "a+"
     )
 end
-dwac.messageDuration = 20 -- seconds
-dwac.messageDuration = dwac.messageDuration -- pass the display time to FACA script
-dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
 
-dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
 
 -- ##########################
 -- Methods
