@@ -17,39 +17,15 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS 
     IN THE SOFTWARE.
 ]]
-
-os                      = require "os"
-io                      = require "io"
-lfs                     = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'SavedGames' folder
+os = require "os"
+io = require "io"
+lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'SavedGames' folder
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.5"
+local version = "0.1.4"
 
-
-
-env.info(baseName .. " starting")
-guiBindPath = './dxgui/bind/?.lua;' .. 
-              './dxgui/loader/?.lua;' .. 
-              './dxgui/skins/skinME/?.lua;' .. 
-              './dxgui/skins/common/?.lua;'
-package.path =
-    ''
-    .. guiBindPath
-	.. './MissionEditor/?.lua;'
-    .. './MissionEditor/modules/?.lua;'	
-    .. lfs.writedir() .. "Scripts/?.lua"
-    .. './Scripts/?.lua;'
-    .. './LuaSocket/?.lua;'
-	.. './Scripts/UI/?.lua;'
-	.. './Scripts/UI/Multiplayer/?.lua;'
-	.. './Scripts/DemoScenes/?.lua;'
-	.. './MAC_Gui/?.lua;'
-    .. package.path
-    
-local dwac_util = _G.require "DWAC_UTIL"
-local dwac_faca = _G.require "DWAC_FACA"
-
+--#region Configuration
 
 -- ##########################
 -- CONFIGURATION PROPERTIES - Tie them to this table so calling scopes can reference
@@ -62,26 +38,302 @@ dwac.enableMapIllumination = true
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 
+--#endregion
 
 
+--#region UTIL
+local function getGroupId(_unit)
+    if _unit then
+        local _group = _unit:getGroup()
+        return _group:getID()
+    end
+end
+dwac.getGroupId = getGroupId
 
+-- useful for debugging
+local function dump(o)
+    if type(o) == 'table' then
+       local s = '{ '
+       for k,v in pairs(o) do
+          if type(k) ~= 'number' then k = '"'..k..'"' end
+          s = s .. '['..k..'] = ' .. dump(v) .. ','
+       end
+       return s .. '} '
+    else
+       return tostring(o)
+    end
+ end
+ dwac.dump = dump
+--#endregion
+
+
+--#region FAC-A
+-- ##########################
+-- Meta Classes
+-- ##########################
+FacTarget = {}
+function FacTarget:new()
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+
+    o.position = {} -- vec3
+    o.unit = {}
+
+    return o
+end
+
+FacUnit = {}
+function FacUnit:new (baseUnit, smokeColor, laserCode)
+    local o = {}
+    setmetatable(o, self)
+    self.__index = self
+    if baseUnit == nil then
+        error("Nil Unit provided to FacUnit constructor")
+    end
+    o.base = baseUnit
+    o.smokeColor = smokeColor or dwac.smokeColors[trigger.smokeColor.Red]
+    o.laserCode = laserCode or dwac.laserCodes.One
+    o.onStation = false
+    o.currentTarget = {}
+    o.targets = {}
+    o.stationMenuPath = {}
+
+    return o
+end
+function FacUnit:goOnStation()
+    dwac.writeDebug("Go ON station")
+    self.onStation = true
+end
+function FacUnit:goOffStation()
+    dwac.writeDebug("Go OFF station")
+    self.onStation = false
+end
+
+
+-- ##########################
+-- Properties
+-- ##########################
+
+dwac.messageDuration = 5
+
+-- Unit types capable of FAC-A that will receive the F10 menu option
+dwac.facCapableUnits = {
+    "SA342M",
+    "SA342L",
+    "SA342Mistral",
+    "SA342Minigun"
+}
+
+-- reverse of trigger.smokeColor
+dwac.smokeColors = {
+    [0] = "Green",
+    [1] = "Red",
+    [2] = "White",
+    [3] = "Orange",
+    [4] = "Blue"
+}
+
+dwac.laserCodes = {
+    One = 1688,
+    Two = 1588,
+    Three = 1488,
+    Four = 1337
+}
+
+-- collection of FAC-A capable units operating in-game
+dwac.facUnits = {}
+-- add method of removing fac units no longer in use by a player
+local function pruneFACUnits()
+    local _facPlayers = dwac.getCurrentFACUnits()
+    local _newFacUnits = {}
+    for _, _facPlayer in pairs(_facPlayers) do
+        for _, _facUnit in pairs(dwac.facUnits) do
+            if _facPlayer:getUnitID() == _facUnit:getUnitID() then
+                table.insert(_newFacUnits, _facUnit)
+                break
+            end
+        end
+    end
+    dwac.facUnits = _newFacUnits
+end
+dwac.pruneFACUnits = pruneFACUnits
+
+
+-- ##########################
+-- Methods
+-- ##########################
+
+local function addFACMenuFeatures(_unit)
+    -- Add the unit for tracking if needed
+    local _facUnit = FacUnit:new(_unit)
+    local _existing = dwac.getFACUnit(_facUnit)
+    local _groupId = dwac.getGroupId(_facUnit.base)
+    
+    if _existing then
+        _facUnit = _existing
+        local _onStationPath = _facUnit.stationMenuPath
+        missionCommands.removeItemForGroup(_groupId, _onStationPath)
+        if _facUnit.onStation then
+            _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go OFF Station", _facPath, _facUnit.goOffStation)
+            missionCommands.addSubMenuForGroup(_groupid, "List targets", _facPath)
+            missionCommands.addCommandForGroup(_groupId, "Smoke target", _facPath, _facUnit.smokeTarget)
+            missionCommands.addCommandForGroup(_groupId, "Laze target", _facPath, _facUnit.lazeTarget)
+            missionCommands.addCommandForGroup(_groupId, "Call artillery", _facPath, _facUnit.callArty)
+        else
+            _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go ON Station", _facPath, _facUnit.goOnStation)
+        end
+        _facUnit.stationMenuPath = _onStationPath
+        dwac.updateFACUnit(_facUnit)
+    else
+        dwac.addFACUnit(_facUnit)
+        --missionCommands.removeItemForGroup(_groupId, {"FAC-A"}) -- clears menu at root for this feature
+        local _facPath = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
+
+        -- Laser Codes
+        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", _facPath)
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.One, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.One})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Two, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Two})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Three, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Three})
+        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Four, _laserPath, dwac.setLaserCode, {_facUnit, dwac.laserCodes.Four})
+
+        -- Smoke Color
+        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", _facPath)
+        missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.Red]})
+        missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.Orange]})
+        missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, {_facUnit, dwac.smokeColors[trigger.smokeColor.White]})
+
+        -- Current Settings
+        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", _facPath, dwac.getCurrentSettings, {_facUnit})
+
+        -- Station
+        local _onStationPath = missionCommands.addCommandForGroup(_groupId, "Go ON Station", _facPath, _facUnit.goOnStation)
+        _facUnit.stationMenuPath = _onStationPath
+        dwac.updateFACUnit(_facUnit)
+    end
+end
+dwac.addFACMenuFeatures = addFACMenuFeatures
+
+local function getCurrentSettings(args)
+    dwac.writeDebug("getCurrentSettings()")
+    local _facUnit = args[1]
+    dwac.writeDebug("getCurrentSettings()_facUnit: " .. dwac.dump(_facUnit))
+    --local _facUnit = dwac.getFACUnit(_facUnit)
+    local _groupId = dwac.getGroupId(_facUnit.base)
+    trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, true)
+end
+dwac.getCurrentSettings = getCurrentSettings
+
+local function setLaserCode(args) -- args: {facUnit, code}
+    dwac.writeDebug("setLaserCode()")
+    args[1].laserCode = args[2]
+    --dwac.writeDebug("setLaserCode()_facUnit: " .. dwac.dump(args[1]))
+    dwac.updateFACUnit(args[1])
+end
+dwac.setLaserCode = setLaserCode
+
+
+local function setFACSmokeColor(args) -- args: {facUnit, color}
+    dwac.writeDebug("setFACSmokeColor()")
+    args[1].smokeColor = args[2]
+    dwac.updateFACUnit(args[1])
+end
+dwac.setFACSmokeColor = setFACSmokeColor
+
+local function isFACUnit(_unit)
+    if _unit ~= nil then
+        for _, _unitName in pairs(dwac.facCapableUnits) do
+            if _unit:getTypeName() == _unitName then
+                return true
+            end
+        end
+    end
+    return false
+end
+dwac.isFACUnit = isFACUnit
+
+-- Extracts all current player units that are FAC-A capable
+local function getCurrentFACCapableUnits()
+    local reply = {}
+    for _coalition = coalition.side.RED, coalition.side.BLUE do
+        local _players = coalition.getPlayers(_coalition) -- returns array of units run by players
+        if _players ~= nil then
+            for i = 1, #_players do
+                local _unit = _players[i]
+                if _unit ~= nil then
+                    if dwac.isFACUnit(_unit) then
+                        table.insert(reply, _unit)
+                    end
+                end
+            end
+        end
+    end
+    return reply
+end
+dwac.getCurrentFACCapableUnits = getCurrentFACCapableUnits
+
+local function addFACUnit(_facUnit)
+   -- dwac.writeDebug("addFACUnit()")
+    if _facUnit then
+        local existingFacUnit = dwac.getFACUnit(_facUnit)
+        if existingFacUnit == nil then
+            table.insert(dwac.facUnits, _facUnit)
+        end
+    end
+end
+dwac.addFACUnit = addFACUnit
+
+local function updateFACUnit(_facUnit)
+    dwac.writeDebug("updateFACUnit()")
+    for i, _value in ipairs(dwac.facUnits) do
+        local valId = _value.base:getID()
+        local facId = _facUnit.base:getID()
+        if valId == facId then
+            table.insert(dwac.facUnits, i, _facUnit)
+            break
+        end
+    end
+end
+dwac.updateFACUnit = updateFACUnit
+
+local function getFACUnit(_newFacUnit)
+    --dwac.writeDebug("getFACUnit()")
+    for _, _facUnit in pairs(dwac.facUnits) do
+        if _facUnit then
+            if _facUnit.base:getID() == _newFacUnit.base:getID() then
+                return _facUnit
+            end
+        end
+    end    
+end
+dwac.getFACUnit = getFACUnit
+
+local function doFoo()
+    trigger.action.outText("DWAC loaded", dwac.messageDuration, false)
+    --dwac.doFoo()
+end
+dwac.doFoo = doFoo
+--#endregion
+
+
+--#region DWAC
 
 -- ##########################
 -- Properties
 -- ##########################
 if dwac.enableLogging then
     local _date = os.date("*t")
-    dwac.logger = io.open(lfs.writedir() .. "Logs/" .. baseName .. "_" .. _date.year .. "_" .. _date.month .. "_" .. _date.day .. ".log", "a+")
+    dwac.logger =
+        io.open(
+        lfs.writedir() .. "Logs/" .. baseName .. "_" .. _date.year .. "_" .. _date.month .. "_" .. _date.day .. ".log",
+        "a+"
+    )
 end
 dwac.messageDuration = 20 -- seconds
-dwac_faca.messageDuration = dwac.messageDuration -- pass the display time to FACA script
+dwac.messageDuration = dwac.messageDuration -- pass the display time to FACA script
 dwac.f10MenuUpdateFrequency = 4 -- F10 menu refresh rate
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
-
-
-
-
 
 -- ##########################
 -- Methods
@@ -93,7 +345,7 @@ local function writeDebug(debugLog)
     end
 end
 dwac.writeDebug = writeDebug
-dwac_faca.writeDebug = writeDebug
+dwac.writeDebug = writeDebug
 
 local function getMarkerRequest(requestText)
     local isSmokeRequest = requestText:match("^-smoke")
@@ -117,7 +369,9 @@ local function setMapSmoke(requestText, vector)
     smokeColor = requestText:match("^-smoke;(%a+)")
     local lat, lon, alt = coord.LOtoLL(vector)
     if smokeColor then
-        dwac.writeDebug("Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt)
+        dwac.writeDebug(
+            "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
+        )
         color = string.lower(smokeColor)
         if color == "green" then
             trigger.action.smoke(vector, trigger.smokeColor.Green)
@@ -161,23 +415,22 @@ local function getLogTimeStamp()
 end
 dwac.getLogTimeStamp = getLogTimeStamp
 
-
 -- highest level DWAC F10 menu addition
 --   add calls to functions which add specific menu features here to keep it clean
 --   REMEMBER to add clean-up to removeF10MenuOptions()
 local function addF10MenuOptions()
     timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + dwac.f10MenuUpdateFrequency)
     -- FAC-A
-    local _units = dwac_faca.getCurrentFACCapableUnits()
+    local _units = dwac.getCurrentFACCapableUnits()
     if #_units > 0 then
-        for i=1, #_units do
-            dwac_faca.addFACMenuFeatures(_units[i])
+        for i = 1, #_units do
+            dwac.addFACMenuFeatures(_units[i])
         end
-    end    
+    end
 end
 dwac.addF10MenuOptions = addF10MenuOptions
 
-local function missionStopHandler(event)    
+local function missionStopHandler(event)
     dwac.writeDebug("Closing event handlers")
     if mapIlluminationRequestHandler then
         world.removeEventHandler(mapIlluminationRequestHandler)
@@ -194,24 +447,20 @@ local function missionStopHandler(event)
 end
 dwac.missionStopHandler = missionStopHandler
 
-
-
-
-
 -- ##########################
 -- EVENT HANDLING
 -- ##########################
 dwac.dwacEventHandler = {}
-function dwac.dwacEventHandler:onEvent(event)    
+function dwac.dwacEventHandler:onEvent(event)
     -- *** Close Logger on Mission Stop***
     if event.id == world.event.S_EVENT_MISSION_END then
         dwac.missionStopHandler(event)
     end
-    
+
     -- *** Map Request ***
     if event.id == world.event.S_EVENT_MARK_CHANGE then
         local markerPanels = world.getMarkPanels()
-        for i,panel in ipairs(markerPanels) do
+        for i, panel in ipairs(markerPanels) do
             if event.idx == panel.idx then
                 local markType = dwac.getMarkerRequest(panel.text)
                 if dwac.enableMapSmoke and markType == dwac.MapRequest.SMOKE then
@@ -219,7 +468,7 @@ function dwac.dwacEventHandler:onEvent(event)
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
                     break
-                elseif dwac.enableMapIllumination and  markType == dwac.MapRequest.ILLUMINATION then
+                elseif dwac.enableMapIllumination and markType == dwac.MapRequest.ILLUMINATION then
                     panel.pos.y = dwac.mapIlluminationAltitude
                     if dwac.setMapIllumination(panel.pos) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
@@ -236,11 +485,12 @@ function dwac.dwacEventHandler:onEvent(event)
 end
 world.addEventHandler(dwac.dwacEventHandler)
 
-
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
-dwac_faca.doFoo()
---dwac_util.doFoo()
+dwac.doFoo()
+--dwac.doFoo()
+
+--#endregion
 
 dwac.writeDebug("DWAC Active")
 return dwac
