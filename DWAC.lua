@@ -24,7 +24,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.4"
+local version = "0.1.5"
 
 --#region Configuration
 
@@ -54,6 +54,21 @@ local function getGroupId(_unit)
     end
 end
 dwac.getGroupId = getGroupId
+
+--get distance in meters assuming a Flat world (DSMC)
+function getDistance(_point1, _point2)
+
+    local xUnit = _point1.x
+    local yUnit = _point1.z
+    local xZone = _point2.x
+    local yZone = _point2.z
+
+    local xDiff = xUnit - xZone
+    local yDiff = yUnit - yZone
+
+    return math.sqrt(xDiff * xDiff + yDiff * yDiff)
+end
+dwac.getDistance = getDistance
 
 -- useful for debugging
 local function dump(o)
@@ -103,7 +118,10 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.onStation = false
     o.currentTarget = nil
     o.targets = {}
-    o.noTargetText = "No target selected"
+    o.responses = {
+        noTargetText = "No target selected",
+        outOfRange = "Target out of range"
+    }
 
     return o
 end
@@ -118,19 +136,20 @@ end
 function FacUnit:smokeTarget()
     dwac.writeDebug("Smoke Target: ")
     if self.currentTarget then
+        if self:targetInRange() then
+            trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
+        end
     else
         local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
-    --self.onStation = false
-    --dwac.updateFACUnit(self)
 end
 function FacUnit:lazeTarget()
     dwac.writeDebug("Laze Target: ")
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
     -- self.onStation = false
     -- dwac.updateFACUnit(self)
@@ -140,10 +159,13 @@ function FacUnit:callArty()
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.noTargetText, dwac.messageDuration, false)
+        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
     -- self.onStation = false
     -- dwac.updateFACUnit(self)
+end
+function FacUnit:targetInRange()
+
 end
 
 
@@ -152,6 +174,9 @@ end
 -- ##########################
 
 dwac.messageDuration = 5
+dwac.facMaxEngagmentRange = 4300 -- meters
+dwac.facMaxDetectionRange = 6000
+dwac.maxTargetTracking = 5
 
 -- Unit types capable of FAC-A that will receive the F10 menu option
 dwac.facCapableUnits = {
@@ -229,7 +254,22 @@ local function addFACMenuFeatures(_unit)
         missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])  
         if dwac.facUnits[_unitId].onStation then
             dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _offStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
+            local _controller = dwac.facUnits[_unitId].base:getController()
             
+            local _searchVolume = {
+                id = world.VolumeType.SPHERE,
+                params = {
+                    point = dwac.facUnits[_unitId].base:getPoint(),
+                    radius = dwac.facMaxDetectionRange
+                }
+            }
+
+            dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
+            -- world.searchObjects returns the number of items found
+            world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+            table.sort(dwac.facUnits[_unitId].targets, function(unit1, unit2) return unit1.dist < unit2.dist end) -- sorted closest first
+            
+            dwac.writeDebug("Targets: " .. dwac.dump(dwac.facUnits[_unitId].targets))
                 -- loop target collection 
             --if dwac.facUnits[_unitId].currentTarget then
             if not dwac.facMenuDB[_groupId][_listTargetPath] then
@@ -289,6 +329,34 @@ local function addFACMenuFeatures(_unit)
     end
 end
 dwac.addFACMenuFeatures = addFACMenuFeatures
+
+local function processSearchResults(_unit, args)
+    local _facUnit = args[1]
+    local _coalition = _facUnit.base:getCoalition()
+    local _facUnitPoint = _facUnit.base:getPosition().p
+    local _offsetFACAPos = { x = _facUnitPoint.x, y = _facUnitPoint.y, z = _facUnitPoint.z }
+
+    -- DSMC based
+    pcall(function()
+        if _unit ~= nil
+        and _unit:getLife() > 0
+        and _unit:isActive()
+        and _unit:getCoalition() ~= _coalition
+        and not _unit:inAir() then
+            local _tempPoint = _unit:getPoint()
+            local _offsetEnemyPos = { x = _tempPoint.x, y = _tempPoint.y + 2.0, z = _tempPoint.z } -- slightly above ground level
+            local landVisible = land.isVisible(_facUnitPoint,_offsetEnemyPos )
+            if land.isVisible(_offsetFACAPos,_offsetEnemyPos ) then
+                local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
+
+                if _dist < dwac.facMaxDetectionRange then
+                    table.insert(_facUnit.targets,{unit=_unit, dist=_dist, type=_unit:getTypeName()})
+                end
+            end
+        end
+    end)
+end
+dwac.processSearchResults = processSearchResults
 
 local function getCurrentSettings(args)
     local _facUnit = args[1]
