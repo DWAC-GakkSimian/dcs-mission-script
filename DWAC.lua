@@ -56,7 +56,7 @@ end
 dwac.getGroupId = getGroupId
 
 --get distance in meters assuming a Flat world (DSMC)
-function getDistance(_point1, _point2)
+local function getDistance(_point1, _point2)
 
     local xUnit = _point1.x
     local yUnit = _point1.z
@@ -69,6 +69,97 @@ function getDistance(_point1, _point2)
     return math.sqrt(xDiff * xDiff + yDiff * yDiff)
 end
 dwac.getDistance = getDistance
+
+-- DSMC based
+local function deepCopy(object)
+    local lookup_table = {}
+	local function _copy(object)
+		if type(object) ~= "table" then
+			return object
+		elseif lookup_table[object] then
+			return lookup_table[object]
+		end
+		local new_table = {}
+		lookup_table[object] = new_table
+		for index, value in pairs(object) do
+			new_table[_copy(index)] = _copy(value)
+		end
+		return setmetatable(new_table, getmetatable(object))
+	end
+	return _copy(object)
+end
+dwac.deepCopy = deepCopy
+
+-- DSMC based
+local function getNorthCorrection(gPoint)	--gets the correction needed for true north
+	local point = dwac.deepCopy(gPoint)
+	if not point.z then --Vec2; convert to Vec3
+		point.z = point.y
+		point.y = 0
+	end
+	local lat, lon = coord.LOtoLL(point)
+	local north_posit = coord.LLtoLO(lat + 1, lon)
+	return math.atan2(north_posit.z - point.z, north_posit.x - point.x)
+end
+dwac.getNorthCorrection = getNorthCorrection
+
+-- DSMC based
+local function getHeading(unit, rawHeading)
+	local unitpos = unit:getPosition()
+	if unitpos then
+		local Heading = math.atan2(unitpos.x.z, unitpos.x.x)
+		if not rawHeading then
+			Heading = Heading + dwac.getNorthCorrection(unitpos.p)
+		end
+		if Heading < 0 then
+			Heading = Heading + 2*math.pi	-- put heading in range of 0 to 2*pi
+		end
+		return Heading
+	end
+end
+dwac.getHeading = getHeading
+
+-- DSMC based
+local function vecsub(vec1, vec2)
+	return {x = vec1.x - vec2.x, y = vec1.y - vec2.y, z = vec1.z - vec2.z}
+end
+dwac.vecsub = vecsub
+
+-- DSMC based
+function vecdp(vec1, vec2)
+	return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
+end
+dwac.vecdp = vecdp
+
+-- DSMC based
+local function getClockDirection(_unit, _obj)
+    -- Source: Helicopter Script - Thanks!
+    local _position = _obj:getPosition().p -- get position of _obj
+    local _playerPosition = _unit:getPosition().p -- get position of _unit
+    local _relativePosition = dwac.vecsub(_position, _playerPosition)
+    local _playerHeading = dwac.getHeading(_unit) -- the rest of the code determines the 'o'clock' bearing of the missile relative to the helicopter
+
+    local _headingVector = { x = math.cos(_playerHeading), y = 0, z = math.sin(_playerHeading) }
+
+    local _headingVectorPerpendicular = { x = math.cos(_playerHeading + math.pi / 2), y = 0, z = math.sin(_playerHeading + math.pi / 2) }
+
+    local _forwardDistance = dwac.vecdp(_relativePosition, _headingVector)
+
+    local _rightDistance = dwac.vecdp(_relativePosition, _headingVectorPerpendicular)
+
+    local _angle = math.atan2(_rightDistance, _forwardDistance) * 180 / math.pi
+
+    if _angle < 0 then
+        _angle = 360 + _angle
+    end
+    _angle = math.floor(_angle * 12 / 360 + 0.5)
+    if _angle == 0 then
+        _angle = 12
+    end
+
+    return _angle
+end
+dwac.getClockDirection = getClockDirection
 
 -- useful for debugging
 local function dump(o)
@@ -164,8 +255,35 @@ function FacUnit:callArty()
     -- self.onStation = false
     -- dwac.updateFACUnit(self)
 end
-function FacUnit:targetInRange()
-
+function FacUnit:setCurrentTarget(arg)
+    --dwac.writeDebug("setting current target")
+    if arg then
+        local _target = arg[1]
+        dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
+        if _target == nil then
+            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Lost contact: " .. self.currentTarget.type, dwac.messageDuration, true)
+        else
+            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Target selected: " .. _target.type, dwac.messageDuration, true)
+        end
+        self.currentTarget = _target
+    end
+end
+function FacUnit:currentTargetInList()
+    if self.currentTarget == nil then
+        return true -- though not in list, no current target should not generate a "target lost" message
+    end
+    if self.currentTarget.unit:isExist() then
+        local _currentId = self.currentTarget.unit:getID()
+        for _, _target in pairs(self.targets) do
+            if _currentId == self.currentTarget.unit:getID() then
+                return true
+            end
+        end
+        self:setCurrentTarget({nil})
+    else
+        self:setCurrentTarget({nil})
+    end
+    return false
 end
 
 
@@ -177,6 +295,7 @@ dwac.messageDuration = 5
 dwac.facMaxEngagmentRange = 4300 -- meters
 dwac.facMaxDetectionRange = 6000
 dwac.maxTargetTracking = 5
+dwac.scanForTargetFrequency = 5
 
 -- Unit types capable of FAC-A that will receive the F10 menu option
 dwac.facCapableUnits = {
@@ -251,30 +370,28 @@ local function addFACMenuFeatures(_unit)
     local _artyTargetPath = "ArtyTargetPath"
 
     if dwac.facMenuDB[_groupId][_stationPath] then
-        missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])  
+        -- Remove dynamic menu items for refresh
+        missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])
+
+        -- Handle being On-Station
         if dwac.facUnits[_unitId].onStation then
             dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _offStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
-            local _controller = dwac.facUnits[_unitId].base:getController()
             
-            local _searchVolume = {
-                id = world.VolumeType.SPHERE,
-                params = {
-                    point = dwac.facUnits[_unitId].base:getPoint(),
-                    radius = dwac.facMaxDetectionRange
-                }
-            }
-
-            dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
-            -- world.searchObjects returns the number of items found
-            world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
-            table.sort(dwac.facUnits[_unitId].targets, function(unit1, unit2) return unit1.dist < unit2.dist end) -- sorted closest first
+            dwac.facUnits[_unitId]:currentTargetInList()
             
-            dwac.writeDebug("Targets: " .. dwac.dump(dwac.facUnits[_unitId].targets))
-                -- loop target collection 
-            --if dwac.facUnits[_unitId].currentTarget then
-            if not dwac.facMenuDB[_groupId][_listTargetPath] then
-                dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
+            -- Recreate the detected targets on each cycle
+            if dwac.facMenuDB[_groupId][_listTargetPath] then
+                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
             end
+            dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
+            dwac.writeDebug("___RESET MENU___")
+
+            dwac.sortTargets(dwac.facUnits[_unitId])
+            for _, _target in pairs(dwac.facUnits[_unitId].targets) do
+                dwac.writeDebug("Set menu target: " .. _target.type)
+                missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target})
+            end
+
             if not dwac.facMenuDB[_groupId][_smokeTargetPath] then
                 dwac.facMenuDB[_groupId][_smokeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Smoke target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].smokeTarget, dwac.facUnits[_unitId])
             end
@@ -350,13 +467,43 @@ local function processSearchResults(_unit, args)
                 local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
 
                 if _dist < dwac.facMaxDetectionRange then
-                    table.insert(_facUnit.targets,{unit=_unit, dist=_dist, type=_unit:getTypeName()})
+                    table.insert(_facUnit.targets,{ unit=_unit, dist=_dist, type=_unit:getTypeName()})
                 end
             end
         end
     end)
 end
 dwac.processSearchResults = processSearchResults
+
+local function scanForTargets(_unit)
+    timer.scheduleFunction(dwac.scanForTargets, nil, timer.getTime() + dwac.scanForTargetFrequency)
+    -- Add the unit for tracking if needed
+    if not _unit then
+        return
+    end
+    local _unitId = _unit:getID()
+     -- Handle targets
+    local _searchVolume = {
+        id = world.VolumeType.SPHERE,
+        params = {
+            point = dwac.facUnits[_unitId].base:getPoint(),
+            radius = dwac.facMaxDetectionRange
+        }
+    }
+    dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
+    -- world.searchObjects returns the number of items found
+    world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+end
+dwac.scanForTargets = scanForTargets
+
+local function sortTargets(_facUnit, _asc)    
+    if _asc or _asc == nil then -- default ascending
+        table.sort(_facUnit.targets, function(unit1, unit2) return unit1.dist < unit2.dist end)
+    else
+        table.sort(_facUnit.targets, function(unit1, unit2) return unit1.dist > unit2.dist end)
+    end
+end
+dwac.sortTargets = sortTargets
 
 local function getCurrentSettings(args)
     local _facUnit = args[1]
@@ -531,6 +678,7 @@ local function addF10MenuOptions()
     if _units then
         for _, _unit in pairs(_units) do
             dwac.addFACMenuFeatures(_unit)
+            dwac.scanForTargets(_unit)
         end
     end
 end
