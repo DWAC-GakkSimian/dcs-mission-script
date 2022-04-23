@@ -24,7 +24,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.5"
+local version = "0.1.6"
 
 --#region Configuration
 
@@ -161,6 +161,36 @@ local function getClockDirection(_unit, _obj)
 end
 dwac.getClockDirection = getClockDirection
 
+local function smokePoint(vector, smokeColor)
+    vector.y = vector.y + 2.0
+    local lat, lon, alt = coord.LOtoLL(vector)
+    pcall(function()
+        dwac.writeDebug(
+            "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
+        )
+        color = string.lower(smokeColor)
+        if color == "green" then
+            trigger.action.smoke(vector, trigger.smokeColor.Green)
+            return true
+        elseif color == "red" then
+            trigger.action.smoke(vector, trigger.smokeColor.Red)
+            return true
+        elseif color == "white" then
+            trigger.action.smoke(vector, trigger.smokeColor.White)
+            return true
+        elseif color == "orange" then
+            trigger.action.smoke(vector, trigger.smokeColor.Orange)
+            return true
+        elseif color == "blue" then
+            trigger.action.smoke(vector, trigger.smokeColor.Blue)
+            return true
+        end
+        return false
+    end)
+    return false
+end
+dwac.smokePoint = smokePoint
+
 -- useful for debugging
 local function dump(o)
     if type(o) == 'table' then
@@ -227,8 +257,11 @@ end
 function FacUnit:smokeTarget()
     dwac.writeDebug("Smoke Target: ")
     if self.currentTarget then
-        if self:targetInRange() then
-            trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
+        local inRange = self:targetInRange()
+        
+        dwac.writeDebug("target in range: " .. tostring(inRange))
+        if inRange then
+            dwac.smokePoint(self.currentTarget.unit:getPosition().p, self.smokeColor)
         end
     else
         local groupId = dwac.getGroupId(self.base)
@@ -254,6 +287,15 @@ function FacUnit:callArty()
     end
     -- self.onStation = false
     -- dwac.updateFACUnit(self)
+end
+function FacUnit:targetInRange()
+    dwac.writeDebug("Ranging target")
+    dwac.writeDebug("target dist: " .. self.currentTarget.dist .. " max range: " .. dwac.facMaxEngagmentRange)
+    if self.currentTarget then
+        dwac.writeDebug("target dist: " .. self.currentTarget.dist .. " max range: " .. dwac.facMaxEngagmentRange)
+        return self.currentTarget.dist < dwac.facMaxEngagmentRange
+    end
+    return false
 end
 function FacUnit:setCurrentTarget(arg)
     --dwac.writeDebug("setting current target")
@@ -384,11 +426,11 @@ local function addFACMenuFeatures(_unit)
                 missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
             end
             dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
-            dwac.writeDebug("___RESET MENU___")
+           -- dwac.writeDebug("___RESET MENU___")
 
             dwac.sortTargets(dwac.facUnits[_unitId])
             for _, _target in pairs(dwac.facUnits[_unitId].targets) do
-                dwac.writeDebug("Set menu target: " .. _target.type)
+               -- dwac.writeDebug("Set menu target: " .. _target.type)
                 missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target})
             end
 
@@ -621,29 +663,7 @@ dwac.getMarkerRequest = getMarkerRequest
 local function setMapSmoke(requestText, vector)
     smokeColor = requestText:match("^-smoke;(%a+)")
     local lat, lon, alt = coord.LOtoLL(vector)
-    if smokeColor then
-        dwac.writeDebug(
-            "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
-        )
-        color = string.lower(smokeColor)
-        if color == "green" then
-            trigger.action.smoke(vector, trigger.smokeColor.Green)
-            return true
-        elseif color == "red" then
-            trigger.action.smoke(vector, trigger.smokeColor.Red)
-            return true
-        elseif color == "white" then
-            trigger.action.smoke(vector, trigger.smokeColor.White)
-            return true
-        elseif color == "orange" then
-            trigger.action.smoke(vector, trigger.smokeColor.Orange)
-            return true
-        elseif color == "blue" then
-            trigger.action.smoke(vector, trigger.smokeColor.Blue)
-            return true
-        end
-    end
-    return false
+    return dwac.smokePoint(vector, smokeColor)
 end
 dwac.setMapSmoke = setMapSmoke
 
