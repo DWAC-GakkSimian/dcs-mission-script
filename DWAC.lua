@@ -24,7 +24,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.7"
+local version = "0.1.8"
 
 --#region Configuration
 
@@ -42,6 +42,10 @@ dwac.messageDuration = 20 -- seconds
 dwac.f10MenuUpdateFrequency = 1 -- F10 menu refresh rate
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
+
+dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
+dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target
+dwac.facEnableArtilleryStrike = false   -- allows FAC-A to call arty on target
 
 --#endregion
 
@@ -213,17 +217,6 @@ local function dump(o)
 -- ##########################
 -- Meta Classes
 -- ##########################
--- FacTarget = {}
--- function FacTarget:new()
---     local o = {}
---     setmetatable(o, self)
---     self.__index = self
-
---     o.position = {} -- vec3
---     o.unit = {}
-
---     return o
--- end
 
 FacUnit = {}
 function FacUnit:new (baseUnit, smokeColor, laserCode)
@@ -262,6 +255,9 @@ function FacUnit:goOffStation()
     trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
 end
 function FacUnit:smokeTarget()
+    if not dwac.facEnableSmokeTarget then
+        return
+    end
     dwac.writeDebug("Smoke Target: ")
     if self.currentTarget then
         local inRange = self:targetInRange()
@@ -276,24 +272,26 @@ function FacUnit:smokeTarget()
     end
 end
 function FacUnit:lazeTarget()
+    if not dwac.facEnableLazeTarget then
+        return
+    end
     dwac.writeDebug("Laze Target: ")
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
         trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
-    -- self.onStation = false
-    -- dwac.updateFACUnit(self)
 end
 function FacUnit:callArty()
+    if not dwac.facEnableArtilleryStrike then
+        return
+    end
     dwac.writeDebug("Pound Target: ")
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
         trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
-    -- self.onStation = false
-    -- dwac.updateFACUnit(self)
 end
 function FacUnit:targetInRange()
     dwac.writeDebug("Ranging target")
@@ -305,18 +303,18 @@ function FacUnit:targetInRange()
     return false
 end
 function FacUnit:setCurrentTarget(arg)
-    --dwac.writeDebug("setting current target")
     if arg then
         if not self.menuStable then
             return
         end
-        local _target = arg[1]
-        dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
-        if _target == nil then
-            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Lost contact: " .. self.currentTarget.type, dwac.messageDuration, false)
-        else
-            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Target selected: " .. _target.type, dwac.messageDuration, false)
+        local _target = nil
+        for _, _tgt in pairs(self.targets) do
+            if _tgt.id == arg[1] then
+                _target = _tgt
+                break
+            end
         end
+        dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
         self.currentTarget = _target
     end
 end
@@ -451,17 +449,18 @@ local function addFACMenuFeatures(_unit)
             dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
 
             dwac.sortTargets(dwac.facUnits[_unitId])
+            dwac.limitTargets(dwac.facUnits[_unitId]) -- limit list to dwac.maxTargetsTracked
             for _, _target in pairs(dwac.facUnits[_unitId].targets) do
-                missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target})
+                missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target.id})
             end
 
-            if not dwac.facMenuDB[_groupId][_smokeTargetPath] then
+            if dwac.facEnableSmokeTarget and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_smokeTargetPath] then
                 dwac.facMenuDB[_groupId][_smokeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Smoke target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].smokeTarget, dwac.facUnits[_unitId])
             end
-            if not dwac.facMenuDB[_groupId][_lazeTargetPath] then
+            if dwac.facEnableLazeTarget and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_lazeTargetPath] then
                 dwac.facMenuDB[_groupId][_lazeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Laze target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].lazeTarget, dwac.facUnits[_unitId])
             end
-            if not dwac.facMenuDB[_groupId][_artyTargetPath] then
+            if dwac.facEnableArtilleryStrike and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_artyTargetPath] then
                 dwac.facMenuDB[_groupId][_artyTargetPath] = missionCommands.addCommandForGroup(_groupId, "Call artillery",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].callArty, dwac.facUnits[_unitId])
             end
         else 
@@ -530,7 +529,7 @@ local function processSearchResults(_unit, args)
                 local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
 
                 if _dist < dwac.facMaxDetectionRange then
-                    table.insert(_facUnit.targets,{ unit=_unit, dist=_dist, type=_unit:getTypeName()})
+                    table.insert(_facUnit.targets,{ id = _unit:getID(), unit=_unit, dist=_dist, type=_unit:getTypeName()})
                 end
             end
         end
@@ -567,6 +566,21 @@ local function sortTargets(_facUnit, _asc)
     end
 end
 dwac.sortTargets = sortTargets
+
+local function limitTargets(_facUnit)
+    local _targets = {}
+    local _limit = 0
+    if #_facUnit.targets < dwac.maxTargetTracking then
+        _limit = #_facUnit.targets
+    else
+        _limit = dwac.maxTargetTracking
+    end
+    for i=1, _limit do
+        table.insert(_targets, _facUnit.targets[i])
+    end
+    _facUnit.targets = _targets
+end
+dwac.limitTargets = limitTargets
 
 local function getCurrentSettings(args)
     local _facUnit = args[1]
