@@ -24,7 +24,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.6"
+local version = "0.1.7"
 
 --#region Configuration
 
@@ -213,17 +213,17 @@ local function dump(o)
 -- ##########################
 -- Meta Classes
 -- ##########################
-FacTarget = {}
-function FacTarget:new()
-    local o = {}
-    setmetatable(o, self)
-    self.__index = self
+-- FacTarget = {}
+-- function FacTarget:new()
+--     local o = {}
+--     setmetatable(o, self)
+--     self.__index = self
 
-    o.position = {} -- vec3
-    o.unit = {}
+--     o.position = {} -- vec3
+--     o.unit = {}
 
-    return o
-end
+--     return o
+-- end
 
 FacUnit = {}
 function FacUnit:new (baseUnit, smokeColor, laserCode)
@@ -237,6 +237,7 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.smokeColor = smokeColor or dwac.smokeColors[trigger.smokeColor.Red]
     o.laserCode = laserCode or dwac.laserCodes.One
     o.onStation = false
+    o.menuStable = true
     o.currentTarget = nil
     o.targets = {}
     o.responses = {
@@ -249,10 +250,16 @@ end
 function FacUnit:goOnStation()
     self.onStation = true
     dwac.updateFACUnit(self)
+    local coalition = self.base:getCoalition()
+    local pilot = self.base:getPlayerName()
+    trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is ON station", dwac.messageDuration, false)
 end
 function FacUnit:goOffStation()
     self.onStation = false
     dwac.updateFACUnit(self)
+    local coalition = self.base:getCoalition()
+    local pilot = self.base:getPlayerName()
+    trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
 end
 function FacUnit:smokeTarget()
     dwac.writeDebug("Smoke Target: ")
@@ -300,12 +307,15 @@ end
 function FacUnit:setCurrentTarget(arg)
     --dwac.writeDebug("setting current target")
     if arg then
+        if not self.menuStable then
+            return
+        end
         local _target = arg[1]
         dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
         if _target == nil then
-            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Lost contact: " .. self.currentTarget.type, dwac.messageDuration, true)
+            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Lost contact: " .. self.currentTarget.type, dwac.messageDuration, false)
         else
-            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Target selected: " .. _target.type, dwac.messageDuration, true)
+            trigger.action.outTextForGroup(dwac.getGroupId(self.base), "Target selected: " .. _target.type, dwac.messageDuration, false)
         end
         self.currentTarget = _target
     end
@@ -318,6 +328,7 @@ function FacUnit:currentTargetInList()
         local _currentId = self.currentTarget.unit:getID()
         for _, _target in pairs(self.targets) do
             if _currentId == self.currentTarget.unit:getID() then
+                self:currentTargetPosition()
                 return true
             end
         end
@@ -326,6 +337,16 @@ function FacUnit:currentTargetInList()
         self:setCurrentTarget({nil})
     end
     return false
+end
+function FacUnit:currentTargetPosition()
+    if self.currentTarget == nil then
+        return
+    end
+    local _groupId = dwac.getGroupId(self.base)
+    local _bearing = dwac.getClockDirection(self.base, self.currentTarget.unit)
+    local _msg = "Contact: " .. self.currentTarget.type .. "; " .. _bearing .. " o'clock for " .. math.floor(self.currentTarget.dist) .. " meters"
+    dwac.writeDebug(_msg)
+    trigger.action.outTextForGroup(_groupId, _msg, 1, true)
 end
 
 
@@ -396,6 +417,8 @@ local function addFACMenuFeatures(_unit)
     if not dwac.facUnits[_unitId] then
         dwac.facUnits[_unitId] = FacUnit:new(_unit)
     end
+    dwac.facUnits[_unitId].menuStable = false
+
     local _groupId = dwac.getGroupId(dwac.facUnits[_unitId].base)
     if not dwac.facMenuDB[_groupId] then
         dwac.facMenuDB[_groupId] = {}
@@ -426,11 +449,9 @@ local function addFACMenuFeatures(_unit)
                 missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
             end
             dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
-           -- dwac.writeDebug("___RESET MENU___")
 
             dwac.sortTargets(dwac.facUnits[_unitId])
             for _, _target in pairs(dwac.facUnits[_unitId].targets) do
-               -- dwac.writeDebug("Set menu target: " .. _target.type)
                 missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target})
             end
 
@@ -443,7 +464,6 @@ local function addFACMenuFeatures(_unit)
             if not dwac.facMenuDB[_groupId][_artyTargetPath] then
                 dwac.facMenuDB[_groupId][_artyTargetPath] = missionCommands.addCommandForGroup(_groupId, "Call artillery",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].callArty, dwac.facUnits[_unitId])
             end
-            --end
         else 
             if dwac.facMenuDB[_groupId][_listTargetPath] then
                 missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
@@ -486,6 +506,7 @@ local function addFACMenuFeatures(_unit)
         dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
         dwac.writeDebug("FAC User: " .. _unit:getPlayerName() .. ". Menu: " .. dwac.dump(dwac.facMenuDB[_groupId]))
     end
+    dwac.facUnits[_unitId].menuStable = true
 end
 dwac.addFACMenuFeatures = addFACMenuFeatures
 
