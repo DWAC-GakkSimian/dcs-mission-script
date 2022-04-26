@@ -4,6 +4,12 @@
             Usage: On the F10 map, place a comment circle with text of "-smoke;<color>" (red|orange|green|white|blue) and minimize
         - ILLUMINATION: Map targeted
             Usage: On the F10 map, place a comment circle with text of "-flare" and minimize
+        - FAC-A: (Currently limited to SA-342 Gazelles)
+            - Smoke target
+            - Laze target
+            - Arty target
+        - UAV: Map targeted
+            Usage: On the F10 map, place a comment circle with text of "-uav" and minimize.  Limit one(1) MQ-9 Reaper in flight.
         - VERSION: Map activated
             Usage: On the F10 map, place a comment circle with text of "-version" to see the current version of DWAC
 
@@ -24,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.8"
+local version = "0.1.9"
 
 --#region Configuration
 
@@ -36,12 +42,13 @@ dwac.enableLogging = true
 -- To enable/disable features set their state here
 dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
+dwac.enableMapUAV = false
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 dwac.messageDuration = 20 -- seconds
 dwac.f10MenuUpdateFrequency = 1 -- F10 menu refresh rate
 
-dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3}
+dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
 
 dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
 dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target
@@ -194,6 +201,24 @@ local function smokePoint(vector, smokeColor)
     return false
 end
 dwac.smokePoint = smokePoint
+
+-- returns the nearest coalition airbase for a given point
+local function getNearestAirfield(_point, _coalition)
+    local nearestAirfield = nil
+    local currentABDistance = 0
+    local airbases = coalition.getAirbases(_coalition)
+    for _, _airbase in pairs(airbases) do
+        local abPoint = _airbase:getPoint()
+        local distance = dwac.getDistance(_point, abPoint)
+        local abNotHelipad = _airbase:getCategory() ~= Airbase.Category.HELIPAD
+        if abNotHelipad and (distance < currentABDistance or currentABDistance == 0) then
+            currentABDistance = distance
+            nearestAirfield = _airbase
+        end
+    end
+    return nearestAirfield
+end
+dwac.getNearestAirfield = getNearestAirfield
 
 -- useful for debugging
 local function dump(o)
@@ -503,7 +528,6 @@ local function addFACMenuFeatures(_unit)
 
         -- Station
         dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
-        dwac.writeDebug("FAC User: " .. _unit:getPlayerName() .. ". Menu: " .. dwac.dump(dwac.facMenuDB[_groupId]))
     end
     dwac.facUnits[_unitId].menuStable = true
 end
@@ -665,6 +689,98 @@ if dwac.enableLogging then
     )
 end
 
+dwac.uav = {
+	["frequency"] = 121,
+	["modulation"] = 0,
+	["groupId"] = nil,
+	["tasks"] = 
+	{
+	}, -- end of ["tasks"]
+	["route"] = 
+	{
+		["points"] = 
+		{
+			[1] = 
+			{
+				["alt"] = 2200,
+				["type"] = "Turning Point",
+				["action"] = "Turning Point",
+				["alt_type"] = "BARO",
+				["form"] = "Turning Point",
+				["y"] = 601619.56776342,
+				["x"] = -292447.60082171,
+				["speed"] = 111.000,
+				["task"] = 
+				{
+					["id"] = "ComboTask",
+					["params"] = 
+					{
+						["tasks"] = 
+						{
+							[1] = 
+							{
+								["enabled"] = true,
+								["auto"] = false,
+								["id"] = "Orbit",
+								["number"] = 2,
+								["params"] = 
+								{
+									["altitude"] = 2200,
+									["pattern"] = "Circle",
+									["speed"] = 111.000,
+								}, -- end of ["params"]
+							}, -- end of [2]
+						}, -- end of ["tasks"]
+					}, -- end of ["params"]
+				}, -- end of ["task"]
+			}
+		}, -- end of ["points"]
+	}, -- end of ["route"]
+	["hidden"] = false,
+	["units"] = 
+	{
+		[1] = 
+		{
+			["alt"] = 2200,
+			["hardpoint_racks"] = false,
+			["alt_type"] = "BARO",
+			["livery_id"] = nil,
+			["skill"] = "Random",
+			["speed"] = 111.000,
+			["AddPropAircraft"] = 
+			{
+			}, -- end of ["AddPropAircraft"]
+			["type"] = "MQ-9 Reaper",
+			["unitId"] = 10,
+			["psi"] = 1.7703702498393,
+			["parking_id"] = "30",
+			["x"] = -282214.0,
+			["name"] = "Aerial-1-1",
+			["payload"] = 
+			{
+				["fuel"] = 1000
+			}, -- end of ["payload"]
+			["onboard_num"] = "011",
+			["callsign"] = 
+			{
+				[1] = 1,
+				[2] = 1,
+				["name"] = "Enfield11",
+				[3] = 1,
+			}, -- end of ["callsign"]
+			["heading"] = -1.7703702498393,
+			["y"] = 645912.000,
+		} -- end of [1]
+	}, -- end of ["units"]
+	["y"] = 645912.000,
+	["radioSet"] = false,
+	["name"] = "Aerial-1",
+	["communication"] = true,
+	["x"] = -282214.000,
+	["start_time"] = 0,
+	["task"] = "R",
+	["uncontrolled"] = false,
+}
 
 -- ##########################
 -- Methods
@@ -677,15 +793,25 @@ local function writeDebug(debugLog)
 end
 dwac.writeDebug = writeDebug
 
+dwac.uavInFlight = {
+    [coalition.side.RED] = false,
+    [coalition.side.BLUE] = false,
+}
+
 local function getMarkerRequest(requestText)
-    local isSmokeRequest = requestText:match("^-smoke")
+    local isSmokeRequest = requestText:match("^%s*-smoke")
     if isSmokeRequest then
         return dwac.MapRequest.SMOKE
     end
 
-    local isIllumination = requestText:match("^-flare%s*$")
+    local isIllumination = requestText:match("^%s*-flare%s*$")
     if isIllumination then
         return dwac.MapRequest.ILLUMINATION
+    end
+
+    local isUAVrequest = requestText:match("^%s*-uav")
+    if isUAVrequest then
+        return dwac.MapRequest.UAV
     end
 
     local isVersionRequest = requestText:match("^-version")
@@ -712,6 +838,72 @@ local function setMapIllumination(vector)
     return false
 end
 dwac.setMapIllumination = setMapIllumination
+
+local function uavSearch(_unit, args)
+    if _unit:getTypeName() == "MQ-9 Reaper" and
+        _unit:getCoalition() == args[1] and
+        _unit:inAir() then
+        dwac.uavInFlight[args[1]] = true -- Probably a problem.  Coalition collision?
+    end
+end
+dwac.uavSearch = uavSearch
+
+local function setMapUAV(panel)
+    local vector = panel.pos
+    local _author = panel.author
+    local _playerUnit = nil
+    for _, _group in pairs(coalition.getGroups(panel.coalition)) do
+        for _, _unit in pairs(_group:getUnits()) do
+            if _unit:getPlayerName() == _author then
+                _playerUnit = _unit
+                break
+            end
+        end
+        if _playerUnit ~= nil then
+            break
+        end
+    end
+    if _playerUnit == nil then
+        return false
+    end
+    local _country = _playerUnit:getCountry()
+    local _vol = {
+        id = world.VolumeType.SPHERE,
+        params = {
+            point = vector,
+            radius = 150000 -- 150 kilometer radius
+        }
+    }
+    if dwac.uavInFlight[panel.coalition] then
+        return true -- return without doing anything, but clear the marker
+    end
+    world.searchObjects(Object.Category.UNIT, _vol, dwac.uavSearch, {panel.coalition})
+
+    -- delay to let DCS locate a UAV or not
+    timer.scheduleFunction(function()
+        if not dwac.uavInFlight[panel.coalition] then
+            -- get nearest airfield to vector
+            local nearestAirfield = dwac.getNearestAirfield(vector, panel.coalition)
+            local nearestAirfieldPoint = nearestAirfield:getPoint()
+            -- spawn UAV at altitude with directions to fly to vector and begin orbit.
+            -- Set UAV position
+            dwac.uav.x = nearestAirfieldPoint.x
+            dwac.uav.y = nearestAirfieldPoint.z  -- don't ask me why
+            dwac.uav["units"][1].x = nearestAirfieldPoint.x
+            dwac.uav["units"][1].y = nearestAirfieldPoint.z
+            dwac.uav["route"]["points"][1].x = vector.x
+            dwac.uav["route"]["points"][1].y = vector.z
+
+            coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.uav)
+            trigger.action.outTextForCoalition(panel.coalition, "Launching an MQ-9 Reaper from " .. nearestAirfield:getName(), dwac.messageDuration, false)
+            local lat, lon, alt = coord.LOtoLL(vector)
+            dwac.writeDebug("User " .. _playerUnit:getPlayerName() .. " requested MQ-9 for Lat: " .. lat .. " Lon: " .. lon)
+            dwac.uavInFlight[panel.coalition] = true
+        end
+    end, nil, timer.getTime() + 5)
+    return true
+end
+dwac.setMapUAV = setMapUAV
 
 local function showVersion()
     trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
@@ -783,6 +975,10 @@ function dwac.dwacEventHandler:onEvent(event)
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
                     break
+                elseif dwac.enableMapUAV and markType == dwac.MapRequest.UAV then
+                    if dwac.setMapUAV(panel) then
+                        timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    end
                 elseif markType == dwac.MapRequest.VERSION then
                     dwac.showVersion()
                     timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
