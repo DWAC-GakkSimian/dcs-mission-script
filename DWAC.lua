@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.1.9"
+local version = "0.2.0"
 
 --#region Configuration
 
@@ -42,7 +42,7 @@ dwac.enableLogging = true
 -- To enable/disable features set their state here
 dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
-dwac.enableMapUAV = false
+dwac.enableMapUAV = true
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 dwac.messageDuration = 20 -- seconds
@@ -258,6 +258,17 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.menuStable = true
     o.currentTarget = nil
     o.targets = {}
+    o.spotterDetectionAngles = {
+        1,
+        2,
+        12,
+        11,
+        10,
+        9,
+        8,
+        7,
+        6
+    } -- co-pilot visibility
     o.responses = {
         noTargetText = "No target selected",
         outOfRange = "Target out of range"
@@ -370,6 +381,17 @@ function FacUnit:currentTargetPosition()
     local _msg = "Contact: " .. self.currentTarget.type .. "; " .. _bearing .. " o'clock for " .. math.floor(self.currentTarget.dist) .. " meters"
     dwac.writeDebug(_msg)
     trigger.action.outTextForGroup(_groupId, _msg, 1, true)
+end
+function FacUnit:isSpotterVisible(_unit)
+    if _unit ~= nil then
+        local _targetBearing = dwac.getClockDirection(self.base, _unit)
+        for _, _clockDirection in pairs(self.spotterDetectionAngles) do
+            if _targetBearing == _clockDirection then
+                return true
+            end
+        end        
+    end
+    return false
 end
 
 
@@ -552,7 +574,7 @@ local function processSearchResults(_unit, args)
             if land.isVisible(_offsetFACAPos,_offsetEnemyPos ) then
                 local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
 
-                if _dist < dwac.facMaxDetectionRange then
+                if _facUnit:isSpotterVisible(_unit) and _dist < dwac.facMaxDetectionRange then
                     table.insert(_facUnit.targets,{ id = _unit:getID(), unit=_unit, dist=_dist, type=_unit:getTypeName()})
                 end
             end
