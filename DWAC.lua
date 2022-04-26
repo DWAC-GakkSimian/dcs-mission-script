@@ -350,7 +350,7 @@ function FacUnit:setCurrentTarget(arg)
                 break
             end
         end
-        dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
+       -- dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
         self.currentTarget = _target
     end
 end
@@ -378,6 +378,7 @@ function FacUnit:currentTargetPosition()
     end
     local _groupId = dwac.getGroupId(self.base)
     local _bearing = dwac.getClockDirection(self.base, self.currentTarget.unit)
+    self.currentTarget.dist = dwac.getDistance(self.base:getPosition().p, self.currentTarget.unit:getPosition().p)
     local _msg = "Contact: " .. self.currentTarget.type .. "; " .. _bearing .. " o'clock for " .. math.floor(self.currentTarget.dist) .. " meters"
     dwac.writeDebug(_msg)
     trigger.action.outTextForGroup(_groupId, _msg, 1, true)
