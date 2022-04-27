@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.2.0"
+local version = "0.2.1"
 
 --#region Configuration
 
@@ -210,7 +210,9 @@ local function getNearestAirfield(_point, _coalition)
     for _, _airbase in pairs(airbases) do
         local abPoint = _airbase:getPoint()
         local distance = dwac.getDistance(_point, abPoint)
-        local abNotHelipad = _airbase:getCategory() ~= Airbase.Category.HELIPAD
+        local desc = _airbase:getDesc()
+        -- No helipad or destroyed AB
+        local abNotHelipad = desc["category"] ~= Airbase.Category.HELIPAD and desc["life"] > 0
         if abNotHelipad and (distance < currentABDistance or currentABDistance == 0) then
             currentABDistance = distance
             nearestAirfield = _airbase
