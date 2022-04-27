@@ -260,17 +260,7 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.menuStable = true
     o.currentTarget = nil
     o.targets = {}
-    o.spotterDetectionAngles = {
-        1,
-        2,
-        12,
-        11,
-        10,
-        9,
-        8,
-        7,
-        6
-    } -- co-pilot visibility
+    o.spotterDetectionAngles = {1,2,12,11,10,9,8,7,6} -- co-pilot visibility
     o.responses = {
         noTargetText = "No target selected",
         outOfRange = "Target out of range"
@@ -603,7 +593,8 @@ local function scanForTargets(_unit)
     }
     dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
     -- world.searchObjects returns the number of items found
-    world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+    local foo = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+    dwac.writeDebug("Found Units: " .. tostring(foo))
 end
 dwac.scanForTargets = scanForTargets
 
