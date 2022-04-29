@@ -32,6 +32,7 @@ local dwac = {}
 local baseName = "DWAC"
 local version = "0.2.1"
 
+env.info("DWAC Starting...")
 --#region Configuration
 
 -- ##########################
@@ -259,6 +260,8 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.onStation = false
     o.menuStable = true
     o.currentTarget = nil
+    o.scannedTargets = {}
+    o.expectedScannedTargetCount = 0
     o.targets = {}
     o.spotterDetectionAngles = {1,2,12,11,10,9,8,7,6} -- co-pilot visibility
     o.responses = {
@@ -426,17 +429,24 @@ dwac.laserCodes = {
 dwac.facUnits = {}
 -- add method of removing fac units no longer in use by a player
 local function pruneFACUnits()
-    local _facPlayers = dwac.getCurrentFACUnits()
-    local _newFacUnits = {}
-    for _, _facPlayer in pairs(_facPlayers) do
-        for _, _facUnit in pairs(dwac.facUnits) do
-            if _facPlayer:getUnitID() == _facUnit:getUnitID() then
-                table.insert(_newFacUnits, _facUnit)
+    timer.scheduleFunction(dwac.pruneFACUnits, nil, timer.getTime() + 5)
+    local _facPlayers = dwac.getCurrentFACCapableUnits()
+    local _removeKeys = {}
+    for _key, _facUnit in pairs(dwac.facUnits) do
+        local _exists = false
+        for _, _facPlayer in pairs(_facPlayers) do
+            if _facPlayer:getID() == _key then
+                _exists = true
                 break
             end
         end
+        if not _exists then
+            table.insert(_removeKeys, key)
+        end
     end
-    dwac.facUnits = _newFacUnits
+    for _, _key in pairs(_removeKeys) do
+        dwac.facUnits[_key] = nil
+    end
 end
 dwac.pruneFACUnits = pruneFACUnits
 
@@ -453,6 +463,7 @@ local function addFACMenuFeatures(_unit)
     end
     local _unitId = _unit:getID()
     if not dwac.facUnits[_unitId] then
+        dwac.writeDebug("New FAC-A added")
         dwac.facUnits[_unitId] = FacUnit:new(_unit)
     end
     dwac.facUnits[_unitId].menuStable = false
@@ -488,6 +499,11 @@ local function addFACMenuFeatures(_unit)
             end
             dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
 
+            dwac.writeDebug("Expected scanned targets: " .. tostring(dwac.facUnits[_unitId].expectedScannedTargetCount))
+            dwac.writeDebug("Count scanned targets: " .. tostring(#dwac.facUnits[_unitId].scannedTargets))
+            if dwac.facUnits[_unitId].expectedScannedTargetCount == 0 then
+                dwac.facUnits[_unitId].targets = dwac.facUnits[_unitId].scannedTargets
+            end
             dwac.sortTargets(dwac.facUnits[_unitId])
             dwac.limitTargets(dwac.facUnits[_unitId]) -- limit list to dwac.maxTargetsTracked
             for _, _target in pairs(dwac.facUnits[_unitId].targets) do
@@ -549,11 +565,12 @@ end
 dwac.addFACMenuFeatures = addFACMenuFeatures
 
 local function processSearchResults(_unit, args)
-    local _facUnit = args[1]
+    local _facUnit = dwac.facUnits[args[1].unit:getID()]
+    dwac.writeDebug("***\nprocessSearchResults()_Fac Unit: " .. dwac.dump(_facUnit))
     local _coalition = _facUnit.base:getCoalition()
     local _facUnitPoint = _facUnit.base:getPosition().p
     local _offsetFACAPos = { x = _facUnitPoint.x, y = _facUnitPoint.y, z = _facUnitPoint.z }
-
+    _facUnit.expectedScannedTargetCount = _facUnit.expectedScannedTargetCount - 1
     -- DSMC based
     pcall(function()
         if _unit ~= nil
@@ -568,33 +585,40 @@ local function processSearchResults(_unit, args)
                 local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
 
                 if _facUnit:isSpotterVisible(_unit) and _dist < dwac.facMaxDetectionRange then
-                    table.insert(_facUnit.targets,{ id = _unit:getID(), unit=_unit, dist=_dist, type=_unit:getTypeName()})
+                    table.insert(_facUnit.scannedTargets ,{ id = _unit:getID(), unit=_unit, dist=_dist, type=_unit:getTypeName()})
                 end
             end
         end
-    end)
+   end)
 end
 dwac.processSearchResults = processSearchResults
 
 local function scanForTargets(_unit)
-    timer.scheduleFunction(dwac.scanForTargets, nil, timer.getTime() + dwac.scanForTargetFrequency)
+   -- timer.scheduleFunction(dwac.scanForTargets, nil, timer.getTime() + dwac.scanForTargetFrequency)
     -- Add the unit for tracking if needed
     if not _unit then
         return
     end
     local _unitId = _unit:getID()
      -- Handle targets
-    local _searchVolume = {
-        id = world.VolumeType.SPHERE,
-        params = {
-            point = dwac.facUnits[_unitId].base:getPoint(),
-            radius = dwac.facMaxDetectionRange
+    if dwac.facUnits[_unitId].onStation then
+        -- dwac.writeDebug("_unit: " .. dwac.dump(_unit)) 
+        -- dwac.writeDebug("facUnits: " .. dwac.dump(dwac.facUnits))
+        local _point = _unit:getPoint()  --dwac.facUnits[_unitId].base:getPosition().p
+       --_point.y = _point.y + 2.0
+        local _searchVolume = {
+            id = world.VolumeType.SPHERE,
+            params = {
+                point = _point,
+                radius = dwac.facMaxDetectionRange
+            }
         }
-    }
-    dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
-    -- world.searchObjects returns the number of items found
-    local foo = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
-    dwac.writeDebug("Found Units: " .. tostring(foo))
+        dwac.facUnits[_unitId].scannedTargets = {} -- reset list of tracked targets
+        -- world.searchObjects returns the number of items found
+        
+        dwac.facUnits[_unitId].expectedScannedTargetCount = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+        dwac.writeDebug("scanForTargets() expectedCount " .. dwac.facUnits[_unitId].expectedScannedTargetCount)
+    end
 end
 dwac.scanForTargets = scanForTargets
 
@@ -1008,8 +1032,10 @@ world.addEventHandler(dwac.dwacEventHandler)
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
+dwac.pruneFACUnits() -- repeats to remove any FAC-A units no longer in use
 
 --#endregion
 
 dwac.writeDebug("DWAC Active")
+env.info("DWAC Active")
 return dwac
