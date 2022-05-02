@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.2.1"
+local version = "0.2.2"
 
 --#region Configuration
 
@@ -46,7 +46,7 @@ dwac.enableMapUAV = true
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 dwac.messageDuration = 20 -- seconds
-dwac.f10MenuUpdateFrequency = 1 -- F10 menu refresh rate
+dwac.f10MenuUpdateFrequency = 2 -- F10 menu refresh rate
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
 
@@ -257,7 +257,6 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.smokeColor = smokeColor or dwac.smokeColors[trigger.smokeColor.Red]
     o.laserCode = laserCode or dwac.laserCodes.One
     o.onStation = false
-    o.menuStable = true
     o.currentTarget = nil
     o.targets = {}
     o.spotterDetectionAngles = {1,2,12,11,10,9,8,7,6} -- co-pilot visibility
@@ -270,6 +269,7 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
 end
 function FacUnit:goOnStation()
     self.onStation = true
+    dwac.scanForTargets(self.base)
     dwac.updateFACUnit(self)
     local coalition = self.base:getCoalition()
     local pilot = self.base:getPlayerName()
@@ -332,17 +332,14 @@ function FacUnit:targetInRange()
 end
 function FacUnit:setCurrentTarget(arg)
     if arg then
-        if not self.menuStable then
-            return
-        end
         local _target = nil
         for _, _tgt in pairs(self.targets) do
+            dwac.writeDebug("_tgt: " .. _tgt.id)
             if _tgt.id == arg[1] then
                 _target = _tgt
                 break
             end
         end
-       -- dwac.writeDebug("setCurrentTarget() _target: " .. dwac.dump(_target))
         self.currentTarget = _target
     end
 end
@@ -386,6 +383,21 @@ function FacUnit:isSpotterVisible(_unit)
     end
     return false
 end
+function FacUnit:getTargets()
+    local startCount = 0
+    local reply = nil
+    while true do
+        reply = {}
+        startCount = #self.targets
+        for _,_target in pairs(self.targets) do
+            table.insert(reply, _target)
+        end
+        if #reply == startCount then
+            dwac.writeDebug("getTargets() STOP")
+            return reply
+        end
+    end
+end
 
 
 -- ##########################
@@ -396,7 +408,7 @@ dwac.messageDuration = 5
 dwac.facMaxEngagmentRange = 4300 -- meters
 dwac.facMaxDetectionRange = 6000
 dwac.maxTargetTracking = 5
-dwac.scanForTargetFrequency = 5
+dwac.scanForTargetFrequency = 10
 
 -- Unit types capable of FAC-A that will receive the F10 menu option
 dwac.facCapableUnits = {
@@ -455,7 +467,6 @@ local function addFACMenuFeatures(_unit)
     if not dwac.facUnits[_unitId] then
         dwac.facUnits[_unitId] = FacUnit:new(_unit)
     end
-    dwac.facUnits[_unitId].menuStable = false
 
     local _groupId = dwac.getGroupId(dwac.facUnits[_unitId].base)
     if not dwac.facMenuDB[_groupId] then
@@ -488,10 +499,11 @@ local function addFACMenuFeatures(_unit)
             end
             dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
 
-            dwac.sortTargets(dwac.facUnits[_unitId])
-            dwac.limitTargets(dwac.facUnits[_unitId]) -- limit list to dwac.maxTargetsTracked
-            for _, _target in pairs(dwac.facUnits[_unitId].targets) do
-                missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target.id})
+            local _targets = dwac.facUnits[_unitId]:getTargets()
+            dwac.sortTargets(_targets)
+            -- dwac.limitTargets(dwac.facUnits[_unitId]) -- limit list to dwac.maxTargetsTracked
+            for _, _target in pairs(_targets) do
+                missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target.id}) --dwac.facUnits[_unitId],
             end
 
             if dwac.facEnableSmokeTarget and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_smokeTargetPath] then
@@ -544,7 +556,6 @@ local function addFACMenuFeatures(_unit)
         -- Station
         dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
     end
-    dwac.facUnits[_unitId].menuStable = true
 end
 dwac.addFACMenuFeatures = addFACMenuFeatures
 
@@ -577,7 +588,7 @@ end
 dwac.processSearchResults = processSearchResults
 
 local function scanForTargets(_unit)
-    timer.scheduleFunction(dwac.scanForTargets, nil, timer.getTime() + dwac.scanForTargetFrequency)
+    timer.scheduleFunction(dwac.scanForTargets, _unit, timer.getTime() + dwac.scanForTargetFrequency)
     -- Add the unit for tracking if needed
     if not _unit then
         return
@@ -591,18 +602,19 @@ local function scanForTargets(_unit)
             radius = dwac.facMaxDetectionRange
         }
     }
-    dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
-    -- world.searchObjects returns the number of items found
-    local foo = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
-    dwac.writeDebug("Found Units: " .. tostring(foo))
+    if dwac.facUnits[_unitId].onStation then
+        dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
+        -- world.searchObjects returns the number of items found
+        local foo = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
+    end
 end
 dwac.scanForTargets = scanForTargets
 
-local function sortTargets(_facUnit, _asc)    
+local function sortTargets(_targets, _asc)    
     if _asc or _asc == nil then -- default ascending
-        table.sort(_facUnit.targets, function(unit1, unit2) return unit1.dist < unit2.dist end)
+        table.sort(_targets, function(unit1, unit2) return unit1.dist < unit2.dist end)
     else
-        table.sort(_facUnit.targets, function(unit1, unit2) return unit1.dist > unit2.dist end)
+        table.sort(_targets, function(unit1, unit2) return unit1.dist > unit2.dist end)
     end
 end
 dwac.sortTargets = sortTargets
@@ -941,7 +953,6 @@ local function addF10MenuOptions()
     if _units then
         for _, _unit in pairs(_units) do
             dwac.addFACMenuFeatures(_unit)
-            dwac.scanForTargets(_unit)
         end
     end
 end
