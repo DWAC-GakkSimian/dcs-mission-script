@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.2.2"
+local version = "0.2.3"
 
 --#region Configuration
 
@@ -174,8 +174,8 @@ dwac.getClockDirection = getClockDirection
 
 local function smokePoint(vector, smokeColor)
     vector.y = vector.y + 2.0
-    local lat, lon, alt = coord.LOtoLL(vector)
-    pcall(function()
+    local lat, lon, alt = coord.LOtoLL(vector)    local success = false
+    return pcall(function()
         dwac.writeDebug(
             "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
         )
@@ -198,7 +198,6 @@ local function smokePoint(vector, smokeColor)
         end
         return false
     end)
-    return false
 end
 dwac.smokePoint = smokePoint
 
