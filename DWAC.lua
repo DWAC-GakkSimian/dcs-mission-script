@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.2.4"
+dwac.version = "0.2.5"
 
 --#region Configuration
 
@@ -941,7 +941,7 @@ end
 dwac.setMapUAV = setMapUAV
 
 local function showVersion()
-    trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
+    trigger.action.outText(baseName .. " version: " .. dwac.version, dwac.messageDuration, false)
 end
 dwac.showVersion = showVersion
 
@@ -1013,7 +1013,7 @@ function dwac.dwacEventHandler:onEvent(event)
                     if dwac.setMapUAV(panel) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
-                elseif markType == dwac.MapRequest.VERSION then
+                elseif markType == dwac.PredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredator then
                     dwac.showVersion()
                     timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     break
@@ -1024,7 +1024,7 @@ function dwac.dwacEventHandler:onEvent(event)
 end
 world.addEventHandler(dwac.dwacEventHandler)
 
-trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
+trigger.action.outText(baseName .. " version: " .. dwac.version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
 dwac.pruneFACUnits()
 
