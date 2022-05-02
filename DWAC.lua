@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-local version = "0.2.3"
+local version = "0.2.4"
 
 --#region Configuration
 
@@ -43,6 +43,8 @@ dwac.enableLogging = true
 dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
 dwac.enableMapUAV = true
+dwac.uavAltitude = 1200 -- limits opfor units visible to the uav
+dwac.uavSpeed = 111.000
 dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
 dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
 dwac.messageDuration = 20 -- seconds
@@ -59,7 +61,7 @@ dwac.facEnableArtilleryStrike = false   -- allows FAC-A to call arty on target
 
 --#region UTIL
 local function getGroupId(_unit)
-    if _unit then
+    if _unit and _unit:isExist() then
         local _group = _unit:getGroup()
         return _group:getID()
     end
@@ -267,29 +269,31 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     return o
 end
 function FacUnit:goOnStation()
-    self.onStation = true
-    dwac.scanForTargets(self.base)
-    dwac.updateFACUnit(self)
-    local coalition = self.base:getCoalition()
-    local pilot = self.base:getPlayerName()
-    trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is ON station", dwac.messageDuration, false)
+    if self.base:isExist() then
+        self.onStation = true
+        dwac.scanForTargets(self.base)
+        dwac.updateFACUnit(self)
+        local coalition = self.base:getCoalition()
+        local pilot = self.base:getPlayerName()
+        trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is ON station", dwac.messageDuration, false)
+    end
 end
 function FacUnit:goOffStation()
-    self.onStation = false
-    dwac.updateFACUnit(self)
-    local coalition = self.base:getCoalition()
-    local pilot = self.base:getPlayerName()
-    trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
+    if self.base:isExist() then
+        self.onStation = false
+        dwac.updateFACUnit(self)
+        local coalition = self.base:getCoalition()
+        local pilot = self.base:getPlayerName()
+        trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
+    end
 end
 function FacUnit:smokeTarget()
     if not dwac.facEnableSmokeTarget then
         return
     end
-    dwac.writeDebug("Smoke Target: ")
     if self.currentTarget then
         local inRange = self:targetInRange()
         
-        dwac.writeDebug("target in range: " .. tostring(inRange))
         if inRange then
             dwac.smokePoint(self.currentTarget.unit:getPosition().p, self.smokeColor)
         end
@@ -302,7 +306,7 @@ function FacUnit:lazeTarget()
     if not dwac.facEnableLazeTarget then
         return
     end
-    dwac.writeDebug("Laze Target: ")
+    
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
@@ -313,7 +317,7 @@ function FacUnit:callArty()
     if not dwac.facEnableArtilleryStrike then
         return
     end
-    dwac.writeDebug("Pound Target: ")
+    
     if self.currentTarget then
     else
         local groupId = dwac.getGroupId(self.base)
@@ -321,10 +325,7 @@ function FacUnit:callArty()
     end
 end
 function FacUnit:targetInRange()
-    dwac.writeDebug("Ranging target")
-    dwac.writeDebug("target dist: " .. self.currentTarget.dist .. " max range: " .. dwac.facMaxEngagmentRange)
     if self.currentTarget then
-        dwac.writeDebug("target dist: " .. self.currentTarget.dist .. " max range: " .. dwac.facMaxEngagmentRange)
         return self.currentTarget.dist < dwac.facMaxEngagmentRange
     end
     return false
@@ -333,7 +334,7 @@ function FacUnit:setCurrentTarget(arg)
     if arg then
         local _target = nil
         for _, _tgt in pairs(self.targets) do
-            dwac.writeDebug("_tgt: " .. _tgt.id)
+            
             if _tgt.id == arg[1] then
                 _target = _tgt
                 break
@@ -368,7 +369,6 @@ function FacUnit:currentTargetPosition()
     local _bearing = dwac.getClockDirection(self.base, self.currentTarget.unit)
     self.currentTarget.dist = dwac.getDistance(self.base:getPosition().p, self.currentTarget.unit:getPosition().p)
     local _msg = "Contact: " .. self.currentTarget.type .. "; " .. _bearing .. " o'clock for " .. math.floor(self.currentTarget.dist) .. " meters"
-    dwac.writeDebug(_msg)
     trigger.action.outTextForGroup(_groupId, _msg, 1, true)
 end
 function FacUnit:isSpotterVisible(_unit)
@@ -392,7 +392,6 @@ function FacUnit:getTargets()
             table.insert(reply, _target)
         end
         if #reply == startCount then
-            dwac.writeDebug("getTargets() STOP")
             return reply
         end
     end
@@ -435,15 +434,19 @@ dwac.laserCodes = {
 
 -- collection of FAC-A capable units operating in-game
 dwac.facUnits = {}
--- add method of removing fac units no longer in use by a player
+
 local function pruneFACUnits()
-    local _facPlayers = dwac.getCurrentFACUnits()
+    timer.scheduleFunction(dwac.pruneFACUnits, nil, timer.getTime() + 10)
+    local _facPlayers = dwac.getCurrentFACCapableUnits()
     local _newFacUnits = {}
     for _, _facPlayer in pairs(_facPlayers) do
         for _, _facUnit in pairs(dwac.facUnits) do
-            if _facPlayer:getUnitID() == _facUnit:getUnitID() then
-                table.insert(_newFacUnits, _facUnit)
-                break
+            if _facUnit.base:isExist() then
+                local facId = _facUnit.base:getID()
+                if _facPlayer:getID() == facId then
+                    _newFacUnits[facId] = _facUnit
+                    break
+                end
             end
         end
     end
@@ -468,6 +471,9 @@ local function addFACMenuFeatures(_unit)
     end
 
     local _groupId = dwac.getGroupId(dwac.facUnits[_unitId].base)
+    if _groupId == nil then
+        return
+    end
     if not dwac.facMenuDB[_groupId] then
         dwac.facMenuDB[_groupId] = {}
     end
@@ -589,7 +595,10 @@ dwac.processSearchResults = processSearchResults
 local function scanForTargets(_unit)
     timer.scheduleFunction(dwac.scanForTargets, _unit, timer.getTime() + dwac.scanForTargetFrequency)
     -- Add the unit for tracking if needed
-    if not _unit then
+    if not _unit or not _unit:isExist() then
+        if dwac.facUnits[_unitId] then
+            dwac.facUnits[_unitId] = nil
+        end
         return
     end
     local _unitId = _unit:getID()
@@ -687,7 +696,7 @@ dwac.getCurrentFACCapableUnits = getCurrentFACCapableUnits
 
 local function updateFACUnit(_facUnit)
     if _facUnit then
-        if _facUnit.base then
+        if _facUnit.base and _facUnit.base:isExist() then
             dwac.facUnits[_facUnit.base:getID()] = _facUnit
         end
     end
@@ -729,14 +738,14 @@ dwac.uav = {
 		{
 			[1] = 
 			{
-				["alt"] = 2200,
+				["alt"] = dwac.uavAltitude,
 				["type"] = "Turning Point",
 				["action"] = "Turning Point",
 				["alt_type"] = "BARO",
 				["form"] = "Turning Point",
 				["y"] = 601619.56776342,
 				["x"] = -292447.60082171,
-				["speed"] = 111.000,
+				["speed"] = dwac.uavSpeed,
 				["task"] = 
 				{
 					["id"] = "ComboTask",
@@ -752,9 +761,9 @@ dwac.uav = {
 								["number"] = 2,
 								["params"] = 
 								{
-									["altitude"] = 2200,
+									["altitude"] = dwac.uavAltitude,
 									["pattern"] = "Circle",
-									["speed"] = 111.000,
+									["speed"] = dwac.uavSpeed,
 								}, -- end of ["params"]
 							}, -- end of [2]
 						}, -- end of ["tasks"]
@@ -768,12 +777,12 @@ dwac.uav = {
 	{
 		[1] = 
 		{
-			["alt"] = 2200,
+			["alt"] = dwac.uavAltitude,
 			["hardpoint_racks"] = false,
 			["alt_type"] = "BARO",
 			["livery_id"] = nil,
 			["skill"] = "Random",
-			["speed"] = 111.000,
+			["speed"] = dwac.uavSpeed,
 			["AddPropAircraft"] = 
 			{
 			}, -- end of ["AddPropAircraft"]
@@ -819,7 +828,6 @@ local function writeDebug(debugLog)
     end
 end
 dwac.writeDebug = writeDebug
-
 dwac.uavInFlight = {
     [coalition.side.RED] = false,
     [coalition.side.BLUE] = false,
@@ -1018,8 +1026,9 @@ world.addEventHandler(dwac.dwacEventHandler)
 
 trigger.action.outText(baseName .. " version: " .. version, dwac.messageDuration, false)
 dwac.addF10MenuOptions()
+dwac.pruneFACUnits()
 
 --#endregion
 
-dwac.writeDebug("DWAC Active")
+dwac.writeDebug("DWAC version: " .. dwac.version .. " Active")
 return dwac
