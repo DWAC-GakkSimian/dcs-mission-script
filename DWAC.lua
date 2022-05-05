@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-dwac.version = "0.2.5"
+dwac.version = "0.2.6"
 
 --#region Configuration
 
@@ -45,8 +45,12 @@ dwac.enableMapIllumination = true
 dwac.enableMapUAV = true
 dwac.uavAltitude = 1200 -- limits opfor units visible to the uav
 dwac.uavSpeed = 111.000
-dwac.mapIlluminationAltitude = 700 -- Altitude(meters) the illumination bomb appears determines duration (300sec max)/effectiveness
-dwac.illuminationPower = 1000000 -- 1 to 1000000 brightness
+
+dwac.mapIlluminationAltitude = 700 -- Altitude(meters AGL) the illumination bomb appears determines duration (300sec max)/effectiveness
+dwac.illuminationPower = 1000000 -- 1 to 1000000(max) brightness
+dwac.illuminationUnits = 3 -- number of illum bombs deployed in a star pattern
+dwac.illuminationRadius = 500 -- units deployed in meters from target point
+
 dwac.messageDuration = 20 -- seconds
 dwac.f10MenuUpdateFrequency = 2 -- F10 menu refresh rate
 
@@ -222,6 +226,20 @@ local function getNearestAirfield(_point, _coalition)
     return nearestAirfield
 end
 dwac.getNearestAirfield = getNearestAirfield
+
+local function getRadialPoints(_sourceVec, _radius, _count)
+    -- https://math.stackexchange.com/questions/1030655/how-do-we-find-points-on-a-circle-equidistant-from-each-other
+    local points = {}
+    for i=0, _count do
+        local _vec3 = {}
+        _vec3.y = _sourceVec.y -- same altitude
+        _vec3.x = _sourceVec.x + _radius * math.cos(2 * math.pi * i / _count)
+        _vec3.z = _sourceVec.z + _radius * math.sin(2 * math.pi * i / _count)
+        table.insert(points, _vec3)
+    end
+    return points
+end
+dwac.getRadialPoints = getRadialPoints
 
 -- useful for debugging
 local function dump(o)
@@ -864,10 +882,25 @@ end
 dwac.setMapSmoke = setMapSmoke
 
 local function setMapIllumination(vector)
+    if dwac.illuminationUnits == nil or dwac.illuminationUnits < 0 then
+        dwac.writeDebug("dwac.illuminationUnits is nil or negative")
+        return false
+    end
+
     if vector then
-        local lat, lon, alt = coord.LOtoLL(vector)
+        -- Calculate AGL
+        local _aglVector = {x = vector.x, y = land.getHeight({x = vector.x, y = vector.z}) + dwac.mapIlluminationAltitude, z = vector.z}
+
+        local lat, lon, alt = coord.LOtoLL(_aglVector)
         dwac.writeDebug("Illumination requested: Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt)
-        trigger.action.illuminationBomb(vector, dwac.illuminationPower)
+        if dwac.illuminationUnits == 1 then
+            trigger.action.illuminationBomb(_aglVector, dwac.illuminationPower)
+        else
+            local points = dwac.getRadialPoints(_aglVector, dwac.illuminationRadius, dwac.illuminationUnits)
+            for _, _point in pairs(points) do
+                trigger.action.illuminationBomb(_point, dwac.illuminationPower)
+            end
+        end
         return true
     end
     return false
