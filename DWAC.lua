@@ -303,8 +303,14 @@ function FacUnit:goOffStation()
     if self.base:isExist() then
         self.onStation = false
         dwac.updateFACUnit(self)
-        self.laser = nil
-        self.infra = nil
+        if self.laser then
+            self.laser:destroy()
+            self.laser = nil
+        end
+        if self.infra then
+            self.infra:destroy()
+            self.infra = nil
+        end
         local coalition = self.base:getCoalition()
         local pilot = self.base:getPlayerName()
         trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
@@ -375,8 +381,12 @@ function FacUnit:setCurrentTarget(arg)
                 break
             end
         end
-        if _target == nil then
+        if self.laser then
+            self.laser:destroy()
             self.laser = nil
+        end
+        if self.infra then
+            self.infra:destroy()
             self.infra = nil
         end
         self.currentTarget = _target
