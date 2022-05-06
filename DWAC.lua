@@ -335,13 +335,10 @@ function FacUnit:lazeTarget()
     if not dwac.facEnableLazeTarget then
         return
     end
-    dwac.writeDebug("lazeTarget()")
     if self.currentTarget then
         local inRange = self:targetInRange(true)
-        dwac.writeDebug("Target in range: " .. tostring(inRange))
         if inRange then
             self.laser = Spot.createLaser(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint(), self.laserCode)
-            dwac.writeDebug("self.laser: " .. dwac.dump(self.laser))
             if dwac.facEnableInfraRedTarget then
                 self.infra = Spot.createInfraRed(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint())
             end
