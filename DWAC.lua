@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-dwac.version = "0.2.6"
+dwac.version = "0.2.7"
 
 --#region Configuration
 
@@ -57,7 +57,7 @@ dwac.f10MenuUpdateFrequency = 2 -- F10 menu refresh rate
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
 
 dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
-dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target
+dwac.facEnableLazeTarget = true    -- allows FAC-A to laze a target
 dwac.facEnableArtilleryStrike = false   -- allows FAC-A to call arty on target
 
 --#endregion
@@ -279,6 +279,8 @@ function FacUnit:new (baseUnit, smokeColor, laserCode)
     o.currentTarget = nil
     o.targets = {}
     o.spotterDetectionAngles = {1,2,12,11,10,9,8,7,6} -- co-pilot visibility
+    o.laser = nil
+    o.infra = nil
     o.responses = {
         noTargetText = "No target selected",
         outOfRange = "Target out of range"
@@ -300,6 +302,8 @@ function FacUnit:goOffStation()
     if self.base:isExist() then
         self.onStation = false
         dwac.updateFACUnit(self)
+        self.laser = nil
+        self.infra = nil
         local coalition = self.base:getCoalition()
         local pilot = self.base:getPlayerName()
         trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
@@ -324,8 +328,15 @@ function FacUnit:lazeTarget()
     if not dwac.facEnableLazeTarget then
         return
     end
-    
+    dwac.writeDebug("lazeTarget()")
     if self.currentTarget then
+        local inRange = self:targetInRange(true)
+        dwac.writeDebug("Target in range: " .. tostring(inRange))
+        if inRange then
+            self.laser = Spot.createLaser(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint(), self.laserCode)
+            dwac.writeDebug("self.laser: " .. dwac.dump(self.laser))
+            self.infra = Spot.createInfraRed(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint())
+        end
     else
         local groupId = dwac.getGroupId(self.base)
         trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
@@ -342,7 +353,10 @@ function FacUnit:callArty()
         trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
     end
 end
-function FacUnit:targetInRange()
+function FacUnit:targetInRange(isLaser)
+    if isLaser == true and self.currentTarget then
+        return self.currentTarget.dist < dwac.facMaxDetectionRange
+    end
     if self.currentTarget then
         return self.currentTarget.dist < dwac.facMaxEngagmentRange
     end
@@ -357,6 +371,10 @@ function FacUnit:setCurrentTarget(arg)
                 _target = _tgt
                 break
             end
+        end
+        if _target == nil then
+            self.laser = nil
+            self.infra = nil
         end
         self.currentTarget = _target
     end
@@ -663,7 +681,7 @@ dwac.limitTargets = limitTargets
 local function getCurrentSettings(args)
     local _facUnit = args[1]
     local _groupId = dwac.getGroupId(_facUnit.base)
-    trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, true)
+    trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, false)
 end
 dwac.getCurrentSettings = getCurrentSettings
 
