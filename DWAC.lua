@@ -57,7 +57,8 @@ dwac.f10MenuUpdateFrequency = 2 -- F10 menu refresh rate
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
 
 dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
-dwac.facEnableLazeTarget = true    -- allows FAC-A to laze a target
+dwac.facEnableLazeTarget = true    -- allows FAC-A to laze a target (controls appearance in F10 menu)
+dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
 dwac.facEnableArtilleryStrike = false   -- allows FAC-A to call arty on target
 
 --#endregion
@@ -335,7 +336,9 @@ function FacUnit:lazeTarget()
         if inRange then
             self.laser = Spot.createLaser(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint(), self.laserCode)
             dwac.writeDebug("self.laser: " .. dwac.dump(self.laser))
-            self.infra = Spot.createInfraRed(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint())
+            if dwac.facEnableInfraRedTarget then
+                self.infra = Spot.createInfraRed(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint())
+            end
         end
     else
         local groupId = dwac.getGroupId(self.base)
