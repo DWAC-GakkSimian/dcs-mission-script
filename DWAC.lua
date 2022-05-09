@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-dwac.version = "0.2.7"
+dwac.version = "0.2.8"
 
 --#region Configuration
 
@@ -880,22 +880,23 @@ dwac.uavInFlight = {
 }
 
 local function getMarkerRequest(requestText)
-    local isSmokeRequest = requestText:match("^%s*-smoke")
+    local lowerText = string.lower(requestText)
+    local isSmokeRequest = lowerText:match("^%s*-smoke")
     if isSmokeRequest then
         return dwac.MapRequest.SMOKE
     end
 
-    local isIllumination = requestText:match("^%s*-flare%s*$")
+    local isIllumination = lowerText:match("^%s*-flare%s*$")
     if isIllumination then
         return dwac.MapRequest.ILLUMINATION
     end
 
-    local isUAVrequest = requestText:match("^%s*-uav")
+    local isUAVrequest = lowerText:match("^%s*-uav")
     if isUAVrequest then
         return dwac.MapRequest.UAV
     end
 
-    local isVersionRequest = requestText:match("^-version")
+    local isVersionRequest = lowerText:match("^-version")
     if isVersionRequest then
         return dwac.MapRequest.VERSION
     end
@@ -903,7 +904,8 @@ end
 dwac.getMarkerRequest = getMarkerRequest
 
 local function setMapSmoke(requestText, vector)
-    smokeColor = requestText:match("^-smoke;(%a+)")
+    local lowerText = string.lower(requestText)
+    smokeColor = lowerText:match("^-smoke;(%a+)")
     local lat, lon, alt = coord.LOtoLL(vector)
     return dwac.smokePoint(vector, smokeColor)
 end
@@ -1074,7 +1076,7 @@ function dwac.dwacEventHandler:onEvent(event)
                     if dwac.setMapUAV(panel) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
-                elseif markType == dwac.PredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredatorPredator then
+                elseif markType == dwac.MapRequest.VERSION then
                     dwac.showVersion()
                     timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     break
