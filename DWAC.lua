@@ -30,7 +30,7 @@ lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'Sav
 
 local dwac = {}
 local baseName = "DWAC"
-dwac.version = "0.2.8"
+dwac.version = "0.2.9"
 
 --#region Configuration
 
@@ -181,7 +181,7 @@ dwac.getClockDirection = getClockDirection
 
 local function smokePoint(vector, smokeColor)
     vector.y = vector.y + 2.0
-    local lat, lon, alt = coord.LOtoLL(vector)    local success = false
+    local lat, lon, alt = coord.LOtoLL(vector)
     return pcall(function()
         dwac.writeDebug(
             "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
@@ -202,8 +202,9 @@ local function smokePoint(vector, smokeColor)
         elseif color == "blue" then
             trigger.action.smoke(vector, trigger.smokeColor.Blue)
             return true
+        else
+            return false
         end
-        return false
     end)
 end
 dwac.smokePoint = smokePoint
@@ -881,7 +882,7 @@ dwac.uavInFlight = {
 
 local function getMarkerRequest(requestText)
     local lowerText = string.lower(requestText)
-    local isSmokeRequest = lowerText:match("^%s*-smoke")
+    local isSmokeRequest = lowerText:match("^%s*-smoke;%a+%s*$")
     if isSmokeRequest then
         return dwac.MapRequest.SMOKE
     end
@@ -891,12 +892,12 @@ local function getMarkerRequest(requestText)
         return dwac.MapRequest.ILLUMINATION
     end
 
-    local isUAVrequest = lowerText:match("^%s*-uav")
+    local isUAVrequest = lowerText:match("^%s*-uav%s*$")
     if isUAVrequest then
         return dwac.MapRequest.UAV
     end
 
-    local isVersionRequest = lowerText:match("^-version")
+    local isVersionRequest = lowerText:match("^-version%s*$")
     if isVersionRequest then
         return dwac.MapRequest.VERSION
     end
@@ -906,7 +907,6 @@ dwac.getMarkerRequest = getMarkerRequest
 local function setMapSmoke(requestText, vector)
     local lowerText = string.lower(requestText)
     smokeColor = lowerText:match("^-smoke;(%a+)")
-    local lat, lon, alt = coord.LOtoLL(vector)
     return dwac.smokePoint(vector, smokeColor)
 end
 dwac.setMapSmoke = setMapSmoke
@@ -1076,6 +1076,7 @@ function dwac.dwacEventHandler:onEvent(event)
                     if dwac.setMapUAV(panel) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
+                    break
                 elseif markType == dwac.MapRequest.VERSION then
                     dwac.showVersion()
                     timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
