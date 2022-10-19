@@ -12,7 +12,6 @@
             Usage: On the F10 map, place a comment circle with text of "-uav" and minimize.  Limit one(1) MQ-9 Reaper in flight.
         - VERSION: Map activated
             Usage: On the F10 map, place a comment circle with text of "-version" to see the current version of DWAC
-
     The MIT License (MIT)
     Copyright © 2022 gakksimian@gmail.com
     Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), 
@@ -24,20 +23,17 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS 
     IN THE SOFTWARE.
 ]]
-os = require "os"
-io = require "io"
-lfs = require "lfs" -- lfs.writedir() provided by DCS and points to the DCS 'SavedGames' folder
 
-local dwac = {}
-local baseName = "DWAC"
-dwac.version = "0.3.0"
+if _DATABASE == nil then
+  local _text = "MOOSE is required for the DWAC script "
+  trigger.action.outText( _text, 10, false)
+  env.error( _text, false)
+  return
+end
 
---#region Configuration
+dwac = {}
+dwac.version = "0.4.0"
 
--- ##########################
--- CONFIGURATION PROPERTIES - Tie them to this table so calling scopes can reference
--- ##########################
-dwac.enableLogging = true
 
 -- To enable/disable features set their state here
 dwac.enableMapSmoke = true
@@ -51,27 +47,376 @@ dwac.illuminationPower = 1000000 -- 1 to 1000000(max) brightness
 dwac.illuminationUnits = 3 -- number of illum bombs deployed in a star pattern
 dwac.illuminationRadius = 500 -- units deployed in meters from target point
 
-dwac.messageDuration = 20 -- seconds
-dwac.f10MenuUpdateFrequency = 5 -- F10 menu refresh rate
+dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
+dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target (controls appearance in F10 menu)
+dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
+
+
+dwac.facMaxEngagmentRange = 4300 -- meters
+dwac.facMaxDetectionRange = 6000
+dwac.maxTargetTracking = 5
+dwac.scanForTargetFrequency = 15 -- longer period reduces the chance of failed target selection due to menu update collision
+dwac.displayCurrentTargetFrequency = 5
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
+dwac.messageDuration = 20 -- seconds
+dwac.facAMenuTexts = {
+  baseMenu = "FAC-A",
+  smokeTarget = "Smoke target",
+  laseTarget = "Lase target",
+  currentSettings = "Current settings",
+  setLaserCode = "Set laser code",
+  setSmokeColor = "Set smoke color",
+  targets = "Targets"
+}
 
-dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
-dwac.facEnableLazeTarget = true    -- allows FAC-A to laze a target (controls appearance in F10 menu)
-dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
-dwac.facEnableArtilleryStrike = false   -- allows FAC-A to call arty on target
+-- Unit types capable of FAC-A
+dwac.facUnits = {
+    "SA342M",
+    "SA342L",
+    "SA342Mistral",
+    "SA342Minigun"
+}
+dwac.facLaserCodes = {
+  "1688",
+  "1588",
+  "1488",
+  "1337"
+}
+dwac.facSmokeColors = {
+  "Green",
+  "Red",
+  "White",
+  "Orange",
+  "Blue"
+}
 
---#endregion
+dwac.uav = {
+  ["frequency"] = 121,
+  ["modulation"] = 0,
+  ["groupId"] = nil,
+  ["tasks"] = 
+  {
+  }, -- end of ["tasks"]
+  ["route"] = 
+  {
+    ["points"] = 
+    {
+      [1] = 
+      {
+        ["alt"] = dwac.uavAltitude,
+        ["type"] = "Turning Point",
+        ["action"] = "Turning Point",
+        ["alt_type"] = "BARO",
+        ["form"] = "Turning Point",
+        ["y"] = 601619.56776342,
+        ["x"] = -292447.60082171,
+        ["speed"] = dwac.uavSpeed,
+        ["task"] = 
+        {
+          ["id"] = "ComboTask",
+          ["params"] = 
+          {
+            ["tasks"] = 
+            {
+              [1] = 
+              {
+                ["enabled"] = true,
+                ["auto"] = false,
+                ["id"] = "Orbit",
+                ["number"] = 2,
+                ["params"] = 
+                {
+                  ["altitude"] = dwac.uavAltitude,
+                  ["pattern"] = "Circle",
+                  ["speed"] = dwac.uavSpeed,
+                }, -- end of ["params"]
+              }, -- end of [2]
+            }, -- end of ["tasks"]
+          }, -- end of ["params"]
+        }, -- end of ["task"]
+      }
+    }, -- end of ["points"]
+  }, -- end of ["route"]
+  ["hidden"] = false,
+  ["units"] = 
+  {
+    [1] = 
+    {
+      ["alt"] = dwac.uavAltitude,
+      ["hardpoint_racks"] = false,
+      ["alt_type"] = "BARO",
+      ["livery_id"] = nil,
+      ["skill"] = "Random",
+      ["speed"] = dwac.uavSpeed,
+      ["AddPropAircraft"] = 
+      {
+      }, -- end of ["AddPropAircraft"]
+      ["type"] = "MQ-9 Reaper",
+      ["unitId"] = 10,
+      ["psi"] = 1.7703702498393,
+      ["parking_id"] = "30",
+      ["x"] = -282214.0,
+      ["name"] = "Aerial-1-1",
+      ["payload"] = 
+      {
+        ["fuel"] = 1000
+      }, -- end of ["payload"]
+      ["onboard_num"] = "011",
+      ["callsign"] = 
+      {
+        [1] = 1,
+        [2] = 1,
+        ["name"] = "Enfield11",
+        [3] = 1,
+      }, -- end of ["callsign"]
+      ["heading"] = -1.7703702498393,
+      ["y"] = 645912.000,
+    } -- end of [1]
+  }, -- end of ["units"]
+  ["y"] = 645912.000,
+  ["radioSet"] = false,
+  ["name"] = "Aerial-1",
+  ["communication"] = true,
+  ["x"] = -282214.000,
+  ["start_time"] = 0,
+  ["task"] = "R",
+  ["uncontrolled"] = false,
+}
+dwac.uavInFlight = {
+    [coalition.side.RED] = false,
+    [coalition.side.BLUE] = false,
+}
 
+-- ##########################
+-- Methods
+-- ##########################
 
---#region UTIL
-local function getGroupId(_unit)
-    if _unit and _unit:isExist() then
-        local _group = _unit:getGroup()
-        return _group:getID()
+local function InitFacA()
+  env.info( "InitFacA()" )
+  for _, _client in pairs( _DATABASE.CLIENTS ) do
+    local _type = _client:GetTypeName()
+    if dwac.IsFacAUnit( _type ) then
+      _client.CurrentTarget = nil
+      _client.Targets = {}      
+      _client.CurrentLaserCode = "disabled"
+      _client.CurrentSmokeColor = "disabled"
+      _client.FacAMenu = nil
+      _client.SpotterDetectionAngles = { 1, 2, 12, 11, 10, 9, 8, 7, 6 } -- co-pilot visibility
+      
+      if dwac.facEnableLazeTarget then
+        _client.CurrentLaserCode = dwac.facLaserCodes[1] -- 1688
+      end
+      
+      if dwac.facEnableSmokeTarget then
+        _client.CurrentSmokeColor = dwac.facSmokeColors[2] -- red
+      end
+      
+      dwac.SetupBaseFacAMenu( _client )
+      
+      -- Start target detection
+      local _targetScanObject = SCHEDULER:New( _client )
+      _targetScanObject:Schedule( _client, dwac.ScanForTargets, { _client }, 1, dwac.scanForTargetFrequency, 0.2 ) -- 20% variation on repeat timer
+      
+      -- Start Menu Refresh
+      local _masterObject = SCHEDULER:New( _client )
+      _masterObject:Schedule( _client, dwac.RefreshFacATargetList, { _client }, 1, 10 )
+      
+      -- Display of current target
+      local _currentTargetObject = SCHEDULER:New( _client )
+      _currentTargetObject:Schedule( _client, dwac.DisplayCurrentTarget, { _client }, 1, dwac.displayCurrentTargetFrequency )
     end
+  end
 end
-dwac.getGroupId = getGroupId
+dwac.InitFacA = InitFacA
+
+local function IsFacAUnit( _type )
+  for _, _name in pairs( dwac.facUnits ) do
+    if _name:gsub( "%s+", "" ) == _type then 
+      return true
+    end
+  end
+  return false
+end
+dwac.IsFacAUnit = IsFacAUnit
+
+local function SetupBaseFacAMenu( _client )
+  local _group = GROUP:FindByName( _client.GroupName )
+  _client.FacAMenu = MENU_GROUP:New( _group, dwac.facAMenuTexts.baseMenu )
+  
+  -- Show Current Settings
+  local _facSettingsMenu = MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.currentSettings, _client.FacAMenu, dwac.ShowCurrentFacASettings, _client)
+  
+  -- Set Laser Codes
+  if dwac.facEnableLazeTarget then
+    local _laserMenu = MENU_GROUP:New( _group, dwac.facAMenuTexts.setLaserCode, _client.FacAMenu )
+    for _, _code in pairs( dwac.facLaserCodes ) do
+      MENU_GROUP_COMMAND:New( _group, _code, _laserMenu, dwac.SetFacALaserCode, _client, _code )
+    end
+  end
+  
+  -- Set Smoke Color
+  if dwac.facEnableSmokeTarget then
+    local _smokeMenu = MENU_GROUP:New( _group, dwac.facAMenuTexts.setSmokeColor , _client.FacAMenu )
+    for _, _color in pairs( dwac.facSmokeColors ) do
+      MENU_GROUP_COMMAND:New( _group, _color, _smokeMenu, dwac.SetFacASmokeColor , _client, _color )
+    end
+  end
+  
+  -- Targets
+  MENU_GROUP:New( _group, dwac.facAMenuTexts.targets, _client.FacAMenu )
+end
+dwac.SetupBaseFacAMenu = SetupBaseFacAMenu
+
+local function SetFacALaserCode( _client, _code )
+  _client.CurrentLaserCode = _code
+end
+dwac.SetFacALaserCode = SetFacALaserCode
+
+local function SetFacASmokeColor( _client, _color )
+  _client.CurrentSmokeColor = _color
+end
+dwac.SetFacASmokeColor = SetFacASmokeColor
+
+local function ShowCurrentFacASettings( _client )
+  MESSAGE:New( "Laser: " .. _client.CurrentLaserCode .. "\nSmoke: " .. _client.CurrentSmokeColor ):ToClient( _client )
+end
+dwac.ShowCurrentFacASettings = ShowCurrentFacASettings
+
+local function RefreshFacATargetList( _client )
+  local _targetMenu = _client.FacAMenu:GetMenu( dwac.facAMenuTexts.targets )
+  local _group = GROUP:FindByName( _client.GroupName )
+  _targetMenu:RemoveSubMenus()
+  local _sortedTargets = dwac.sortTargets( _client.Targets )
+  local _limitedTargets = dwac.limitTargets( _sortedTargets )
+  
+  _client:E( "Limited Targets: " .. #_limitedTargets )
+  if #_limitedTargets == 0 then
+    dwac.SetCurrentFacATarget( _client, nil )    
+  else
+    local _currentTargetStillInRange = false
+    for _,_target in pairs( _limitedTargets ) do
+      if _client.CurrentTarget ~= nil and _target.id == _client.CurrentTarget.id then
+        _currentTargetStillInRange = true
+      end
+      MENU_GROUP_COMMAND:New( _group, _target.type, _targetMenu, dwac.SetCurrentFacATarget, _client, _target )
+    end
+    
+    if _currentTargetStillInRange == false then
+      dwac.SetCurrentFacATarget( _client, nil )
+    end
+  end
+end
+dwac.RefreshFacATargetList = RefreshFacATargetList
+
+local function RemoveCurrentTarget( _client )
+  
+end
+dwac.RemoveCurrentTarget = RemoveCurrentTarget
+
+local function SetCurrentFacATarget( _client, _target )
+  _client.CurrentTarget = _target
+  if _target == nil then
+    local _smokeTargetMenu = _client.FacAMenu:GetMenu( dwac.facAMenuTexts.smokeTarget )
+    if _smokeTargetMenu ~= nil then
+      _smokeTargetMenu:Remove( _smokeTargetMenu.MenuStamp, _smokeTargetMenu.MenuTag )
+    end
+    
+    local _laseTargetMenu = _client.FacAMenu:GetMenu( dwac.facAMenuTexts.laseTarget )
+    if _laseTargetMenu ~= nil then
+      _laseTargetMenu:Remove( __laseTargetMenu.MenuStamp, _laseTargetMenu.MenuTag )
+    end
+    dwac.LaseTarget( _client ) -- turn off laser
+  else
+    local _group = GROUP:FindByName( _client.GroupName )
+    MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.smokeTarget, _client.FacAMenu, dwac.SmokeTarget,  _client )
+    MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.laseTarget, _client.FacAMenu, dwac.LaseTarget,  _client )
+  end
+end
+dwac.SetCurrentFacATarget = SetCurrentFacATarget
+
+local function DisplayCurrentTarget( _client )
+  if _client.CurrentTarget ~= nil then
+    local _vector = dwac.getClockDirection( _client, _client.CurrentTarget.unit:GetDCSObject() )
+    MESSAGE:New( _client.CurrentTarget.type .. " at " .. _vector .. " o'clock - " .. math.floor( _client.CurrentTarget.dist ) .. "m", 3, "Current target: ", true ):ToClient( _client )
+  end
+end
+dwac.DisplayCurrentTarget = DisplayCurrentTarget
+
+local function LaseTarget( _client )
+  _client:LaseOff()
+  if _client.CurrentTarget ~= nil then
+    local _laserCode = tonumber( _client.CurrentLaserCode )
+    _client:LaseUnit( _client.CurrentTarget.unit, _laserCode, 600 )
+  end
+end
+dwac.LaseTarget = LaseTarget
+
+local function SmokeTarget( _client )
+  if _client.CurrentTarget ~= nil then
+    local _dist = dwac.getDistance( _client:GetCoordinate(), _client.CurrentTarget.unit:GetCoordinate() )
+    local _color = nil
+    if _dist <= dwac.facMaxEngagmentRange then
+      if _client.CurrentSmokeColor == "Green" then
+        _color = SMOKECOLOR.Green
+      elseif _client.CurrentSmokeColor == "Red" then
+        _color = SMOKECOLOR.Red
+      elseif _client.CurrentSmokeColor == "White" then
+        _color = SMOKECOLOR.White
+      elseif _client.CurrentSmokeColor == "Orange" then
+        _color = SMOKECOLOR.Orange
+      elseif _client.CurrentSmokeColor == "Blue" then
+        _color = SMOKECOLOR.Blue
+      end
+      _client.CurrentTarget.unit:Smoke( _color, 50, 0 )
+    end
+  end
+end
+dwac.SmokeTarget = SmokeTarget
+
+local function ScanForTargets( _client )
+  local _unit = _client:GetClientGroupUnit()
+  local _pos = _unit:GetCoordinate()
+  local _searchVolume = {
+    id = world.VolumeType.SPHERE,
+    params = {
+      point = _pos,
+      radius = dwac.facMaxDetectionRange
+    }
+  }
+  
+  _client.Targets = {}
+  
+  world.searchObjects( Object.Category.UNIT, _searchVolume, dwac.ProcessFacAScanResults, _client)
+end
+dwac.ScanForTargets = ScanForTargets
+
+--- Populates the CLIENT.Targets array with all detected ground units 
+-- @param DCS#UNIT detected DCS unit found within the search volume
+-- @param Wrapper#CLIENT client unit
+local function ProcessFacAScanResults( _detectedUnit, _client )
+  local _facACoalition = _client:GetCoalition()
+  local _pos = _client:GetCoordinate()
+  local _detectedCoalition = _detectedUnit:getCoalition()
+  pcall(function()
+    if _detectedUnit ~= nill
+    and _detectedUnit:getLife() > 0
+    and _detectedUnit:isActive()
+    and _detectedUnit:getCoalition() ~= _facACoalition
+    and not _detectedUnit:inAir() then
+      local _tempPoint = _detectedUnit:getPoint()
+      local _offsetEnemyPos = { x = _tempPoint.x, y = _tempPoint.y + 2.0, z = _tempPoint.z } -- slightly above ground level        
+      if land.isVisible(_pos,_offsetEnemyPos ) then
+        local _dist = dwac.getDistance(_pos, _offsetEnemyPos)
+        if dwac.IsSpotterVisible( _client, _detectedUnit ) and _dist < dwac.facMaxDetectionRange then
+          local _unit = UNIT:Find( _detectedUnit )
+          table.insert(_client.Targets,{ id = _detectedUnit:getID(), unit=_unit, dist=_dist, type=_detectedUnit:getTypeName()})
+        end
+      end
+    end
+  end)
+end
+dwac.ProcessFacAScanResults = ProcessFacAScanResults
 
 --get distance in meters assuming a Flat world (DSMC)
 local function getDistance(_point1, _point2)
@@ -89,73 +434,53 @@ end
 dwac.getDistance = getDistance
 
 -- DSMC based
-local function deepCopy(object)
-    local lookup_table = {}
-	local function _copy(object)
-		if type(object) ~= "table" then
-			return object
-		elseif lookup_table[object] then
-			return lookup_table[object]
-		end
-		local new_table = {}
-		lookup_table[object] = new_table
-		for index, value in pairs(object) do
-			new_table[_copy(index)] = _copy(value)
-		end
-		return setmetatable(new_table, getmetatable(object))
-	end
-	return _copy(object)
-end
-dwac.deepCopy = deepCopy
-
--- DSMC based
-local function getNorthCorrection(gPoint)	--gets the correction needed for true north
-	local point = dwac.deepCopy(gPoint)
-	if not point.z then --Vec2; convert to Vec3
-		point.z = point.y
-		point.y = 0
-	end
-	local lat, lon = coord.LOtoLL(point)
-	local north_posit = coord.LLtoLO(lat + 1, lon)
-	return math.atan2(north_posit.z - point.z, north_posit.x - point.x)
+local function getNorthCorrection(gPoint) --gets the correction needed for true north
+  local point = dwac.deepCopy(gPoint)
+  if not point.z then --Vec2; convert to Vec3
+    point.z = point.y
+    point.y = 0
+  end
+  local lat, lon = coord.LOtoLL(point)
+  local north_posit = coord.LLtoLO(lat + 1, lon)
+  return math.atan2(north_posit.z - point.z, north_posit.x - point.x)
 end
 dwac.getNorthCorrection = getNorthCorrection
 
 -- DSMC based
-local function getHeading(unit, rawHeading)
-	local unitpos = unit:getPosition()
-	if unitpos then
-		local Heading = math.atan2(unitpos.x.z, unitpos.x.x)
-		if not rawHeading then
-			Heading = Heading + dwac.getNorthCorrection(unitpos.p)
-		end
-		if Heading < 0 then
-			Heading = Heading + 2*math.pi	-- put heading in range of 0 to 2*pi
-		end
-		return Heading
-	end
+local function getHeading( _client, rawHeading)
+  local unitpos = _client:GetPosition()
+  if unitpos then
+    local Heading = math.atan2(unitpos.x.z, unitpos.x.x)
+    if not rawHeading then
+      Heading = Heading + dwac.getNorthCorrection(unitpos.p)
+    end
+    if Heading < 0 then
+      Heading = Heading + 2*math.pi -- put heading in range of 0 to 2*pi
+    end
+    return Heading
+  end
 end
 dwac.getHeading = getHeading
 
 -- DSMC based
 local function vecsub(vec1, vec2)
-	return {x = vec1.x - vec2.x, y = vec1.y - vec2.y, z = vec1.z - vec2.z}
+  return {x = vec1.x - vec2.x, y = vec1.y - vec2.y, z = vec1.z - vec2.z}
 end
 dwac.vecsub = vecsub
 
 -- DSMC based
 function vecdp(vec1, vec2)
-	return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
+  return vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
 end
 dwac.vecdp = vecdp
 
 -- DSMC based
-local function getClockDirection(_unit, _obj)
+local function getClockDirection( _client, _obj)
     -- Source: Helicopter Script - Thanks!
     local _position = _obj:getPosition().p -- get position of _obj
-    local _playerPosition = _unit:getPosition().p -- get position of _unit
-    local _relativePosition = dwac.vecsub(_position, _playerPosition)
-    local _playerHeading = dwac.getHeading(_unit) -- the rest of the code determines the 'o'clock' bearing of the missile relative to the helicopter
+    local _playerPosition = _client:GetCoordinate() -- get position of _client
+    local _relativePosition = dwac.vecsub( _position, _playerPosition )
+    local _playerHeading = dwac.getHeading( _client ) -- the rest of the code determines the 'o'clock' bearing of the missile relative to the helicopter
 
     local _headingVector = { x = math.cos(_playerHeading), y = 0, z = math.sin(_playerHeading) }
 
@@ -179,249 +504,56 @@ local function getClockDirection(_unit, _obj)
 end
 dwac.getClockDirection = getClockDirection
 
-local function smokePoint(vector, smokeColor)
-    vector.y = vector.y + 2.0
-    local lat, lon, alt = coord.LOtoLL(vector)
-    return pcall(function()
-        dwac.writeDebug(
-            "Smoke color requested: " .. smokeColor .. " -> Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt
-        )
-        color = string.lower(smokeColor)
-        if color == "green" then
-            trigger.action.smoke(vector, trigger.smokeColor.Green)
-            return true
-        elseif color == "red" then
-            trigger.action.smoke(vector, trigger.smokeColor.Red)
-            return true
-        elseif color == "white" then
-            trigger.action.smoke(vector, trigger.smokeColor.White)
-            return true
-        elseif color == "orange" then
-            trigger.action.smoke(vector, trigger.smokeColor.Orange)
-            return true
-        elseif color == "blue" then
-            trigger.action.smoke(vector, trigger.smokeColor.Blue)
-            return true
-        else
-            return false
-        end
-    end)
+-- DSMC based
+local function deepCopy(object)
+    local lookup_table = {}
+  local function _copy(object)
+    if type(object) ~= "table" then
+      return object
+    elseif lookup_table[object] then
+      return lookup_table[object]
+    end
+    local new_table = {}
+    lookup_table[object] = new_table
+    for index, value in pairs(object) do
+      new_table[_copy(index)] = _copy(value)
+    end
+    return setmetatable(new_table, getmetatable(object))
+  end
+  return _copy(object)
 end
-dwac.smokePoint = smokePoint
+dwac.deepCopy = deepCopy
 
--- returns the nearest coalition airbase for a given point
-local function getNearestAirfield(_point, _coalition)
-    local nearestAirfield = nil
-    local currentABDistance = 0
-    local airbases = coalition.getAirbases(_coalition)
-    for _, _airbase in pairs(airbases) do
-        local abPoint = _airbase:getPoint()
-        local distance = dwac.getDistance(_point, abPoint)
-        local desc = _airbase:getDesc()
-        -- No helipad or destroyed AB
-        local abNotHelipad = desc["category"] ~= Airbase.Category.HELIPAD and desc["life"] > 0
-        if abNotHelipad and (distance < currentABDistance or currentABDistance == 0) then
-            currentABDistance = distance
-            nearestAirfield = _airbase
-        end
-    end
-    return nearestAirfield
+local function sortTargets( _targets, _asc )    
+  local _results = dwac.deepCopy( _targets )
+  if _asc or _asc == nil then -- default ascending
+      table.sort( _results, function(unit1, unit2) return unit1.dist < unit2.dist end )
+  else
+      table.sort( _results, function(unit1, unit2) return unit1.dist > unit2.dist end )
+  end
+  return _results
 end
-dwac.getNearestAirfield = getNearestAirfield
+dwac.sortTargets = sortTargets
 
-local function getRadialPoints(_sourceVec, _radius, _count)
-    -- https://math.stackexchange.com/questions/1030655/how-do-we-find-points-on-a-circle-equidistant-from-each-other
-    local points = {}
-    for i=0, _count do
-        local _vec3 = {}
-        _vec3.y = _sourceVec.y -- same altitude
-        _vec3.x = _sourceVec.x + _radius * math.cos(2 * math.pi * i / _count)
-        _vec3.z = _sourceVec.z + _radius * math.sin(2 * math.pi * i / _count)
-        table.insert(points, _vec3)
-    end
-    return points
+local function limitTargets( _targets )
+  local _results = dwac.deepCopy( _targets )
+  local _limit = 0
+  if #_targets < dwac.maxTargetTracking then
+      _limit = #_targets
+  else
+      _limit = dwac.maxTargetTracking
+  end
+  for i=1, _limit do
+      table.insert( _results, _targets[i])
+  end
+  return _results
 end
-dwac.getRadialPoints = getRadialPoints
+dwac.limitTargets = limitTargets
 
--- useful for debugging
-local function dump(o)
-    if type(o) == 'table' then
-       local s = '{ '
-       for k,v in pairs(o) do
-          if type(k) ~= 'number' then k = '"'..k..'"' end
-          s = s .. '['..k..'] = ' .. dump(v) .. ','
-       end
-       return s .. '} '
-    else
-       return tostring(o)
-    end
- end
- dwac.dump = dump
---#endregion
-
-
---#region FAC-A
-
--- ##########################
--- Meta Classes
--- ##########################
-
-FacUnit = {}
-function FacUnit:new (baseUnit, smokeColor, laserCode)
-    local o = {}
-    setmetatable(o, self)
-    self.__index = self
-    if baseUnit == nil then
-        error("Nil Unit provided to FacUnit constructor")
-    end
-    o.base = baseUnit
-    o.smokeColor = smokeColor or dwac.smokeColors[trigger.smokeColor.Red]
-    o.laserCode = laserCode or dwac.laserCodes.One
-    o.onStation = false
-    o.currentTarget = nil
-    o.targets = {}
-    o.spotterDetectionAngles = {1,2,12,11,10,9,8,7,6} -- co-pilot visibility
-    o.laser = nil
-    o.infra = nil
-    o.responses = {
-        noTargetText = "No target selected",
-        outOfRange = "Target out of range"
-    }
-
-    return o
-end
-function FacUnit:goOnStation()
-    if self.base:isExist() then
-        self.onStation = true
-        dwac.scanForTargets(self.base)
-        dwac.updateFACUnit(self)
-        local coalition = self.base:getCoalition()
-        local pilot = self.base:getPlayerName()
-        trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is ON station", dwac.messageDuration, false)
-    end
-end
-function FacUnit:goOffStation()
-    if self.base:isExist() then
-        self.onStation = false
-        dwac.updateFACUnit(self)
-        if self.laser then
-            self.laser:destroy()
-            self.laser = nil
-        end
-        if self.infra then
-            self.infra:destroy()
-            self.infra = nil
-        end
-        local coalition = self.base:getCoalition()
-        local pilot = self.base:getPlayerName()
-        trigger.action.outTextForCoalition(coalition, pilot .. " FAC-A is OFF station", dwac.messageDuration, false)
-    end
-end
-function FacUnit:smokeTarget()
-    if not dwac.facEnableSmokeTarget then
-        return
-    end
-    if self.currentTarget then
-        local inRange = self:targetInRange()
-        
-        if inRange then
-            dwac.smokePoint(self.currentTarget.unit:getPosition().p, self.smokeColor)
-        end
-    else
-        local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
-    end
-end
-function FacUnit:lazeTarget()
-    if not dwac.facEnableLazeTarget then
-        return
-    end
-    if self.currentTarget then
-        local inRange = self:targetInRange(true)
-        if inRange then
-            self.laser = Spot.createLaser(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint(), self.laserCode)
-            if dwac.facEnableInfraRedTarget then
-                self.infra = Spot.createInfraRed(self.base, {x=0,y=1,z=0}, self.currentTarget.unit:getPoint())
-            end
-        end
-    else
-        local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
-    end
-end
-function FacUnit:callArty()
-    if not dwac.facEnableArtilleryStrike then
-        return
-    end
-    
-    if self.currentTarget then
-    else
-        local groupId = dwac.getGroupId(self.base)
-        trigger.action.outTextForGroup(groupId, self.responses["noTargetText"], dwac.messageDuration, false)
-    end
-end
-function FacUnit:targetInRange(isLaser)
-    if isLaser == true and self.currentTarget then
-        return self.currentTarget.dist < dwac.facMaxDetectionRange
-    end
-    if self.currentTarget then
-        return self.currentTarget.dist < dwac.facMaxEngagmentRange
-    end
-    return false
-end
-function FacUnit:setCurrentTarget(arg)
-    if arg then
-        local _target = nil
-        for _, _tgt in pairs(self.targets) do
-            
-            if _tgt.id == arg[1] then
-                _target = _tgt
-                break
-            end
-        end
-        if self.laser then
-            self.laser:destroy()
-            self.laser = nil
-        end
-        if self.infra then
-            self.infra:destroy()
-            self.infra = nil
-        end
-        self.currentTarget = _target
-    end
-end
-function FacUnit:currentTargetInList()
-    if self.currentTarget == nil then
-        return true -- though not in list, no current target should not generate a "target lost" message
-    end
-    if self.currentTarget.unit:isExist() then
-        local _currentId = self.currentTarget.unit:getID()
-        for _, _target in pairs(self.targets) do
-            if _currentId == self.currentTarget.unit:getID() then
-                self:currentTargetPosition()
-                return true
-            end
-        end
-        self:setCurrentTarget({nil})
-    else
-        self:setCurrentTarget({nil})
-    end
-    return false
-end
-function FacUnit:currentTargetPosition()
-    if self.currentTarget == nil then
-        return
-    end
-    local _groupId = dwac.getGroupId(self.base)
-    local _bearing = dwac.getClockDirection(self.base, self.currentTarget.unit)
-    self.currentTarget.dist = dwac.getDistance(self.base:getPosition().p, self.currentTarget.unit:getPosition().p)
-    local _msg = "Contact: " .. self.currentTarget.type .. "; " .. _bearing .. " o'clock for " .. math.floor(self.currentTarget.dist) .. " meters"
-    trigger.action.outTextForGroup(_groupId, _msg, 1, false)
-end
-function FacUnit:isSpotterVisible(_unit)
-    if _unit ~= nil then
-        local _targetBearing = dwac.getClockDirection(self.base, _unit)
-        for _, _clockDirection in pairs(self.spotterDetectionAngles) do
+function IsSpotterVisible( _client, _target )
+    if _target ~= nil then
+        local _targetBearing = dwac.getClockDirection( _client, _target)
+        for _, _clockDirection in pairs( _client.SpotterDetectionAngles ) do
             if _targetBearing == _clockDirection then
                 return true
             end
@@ -429,472 +561,7 @@ function FacUnit:isSpotterVisible(_unit)
     end
     return false
 end
-function FacUnit:getTargets()
-    local startCount = 0
-    local reply = nil
-    while true do
-        reply = {}
-        startCount = #self.targets
-        for _,_target in pairs(self.targets) do
-            table.insert(reply, _target)
-        end
-        if #reply == startCount then
-            return reply
-        end
-    end
-end
-
-
--- ##########################
--- Properties
--- ##########################
-
-dwac.messageDuration = 5
-dwac.facMaxEngagmentRange = 4300 -- meters
-dwac.facMaxDetectionRange = 6000
-dwac.maxTargetTracking = 5
-dwac.scanForTargetFrequency = 10
-
--- Unit types capable of FAC-A that will receive the F10 menu option
-dwac.facCapableUnits = {
-    "SA342M",
-    "SA342L",
-    "SA342Mistral",
-    "SA342Minigun"
-}
-
--- reverse of trigger.smokeColor
-dwac.smokeColors = {
-    [0] = "Green",
-    [1] = "Red",
-    [2] = "White",
-    [3] = "Orange",
-    [4] = "Blue"
-}
-
-dwac.laserCodes = {
-    One = 1688,
-    Two = 1588,
-    Three = 1488,
-    Four = 1337
-}
-
--- collection of FAC-A capable units operating in-game
-dwac.facUnits = {}
-
-local function pruneFACUnits()
-    timer.scheduleFunction(dwac.pruneFACUnits, nil, timer.getTime() + 10)
-    local _facPlayers = dwac.getCurrentFACCapableUnits()
-    local _newFacUnits = {}
-    for _, _facPlayer in pairs(_facPlayers) do
-        for _, _facUnit in pairs(dwac.facUnits) do
-            if _facUnit.base:isExist() then
-                local facId = _facUnit.base:getID()
-                if _facPlayer:getID() == facId then
-                    _newFacUnits[facId] = _facUnit
-                    break
-                end
-            end
-        end
-    end
-    dwac.facUnits = _newFacUnits
-end
-dwac.pruneFACUnits = pruneFACUnits
-
-dwac.facMenuDB = {}
-
--- ##########################
--- Methods
--- ##########################
-
-local function addFACMenuFeatures(_unit)
-    -- Add the unit for tracking if needed
-    if not _unit then
-        return
-    end
-    local _unitId = _unit:getID()
-    if not dwac.facUnits[_unitId] then
-        dwac.facUnits[_unitId] = FacUnit:new(_unit)
-    end
-
-    local _groupId = dwac.getGroupId(dwac.facUnits[_unitId].base)
-    if _groupId == nil then
-        return
-    end
-    if not dwac.facMenuDB[_groupId] then
-        dwac.facMenuDB[_groupId] = {}
-    end
-
-    local _FACA = "FAC-A"
-    local _onStation = "Go ON Station"
-    local _offStation = "Go OFF Station"
-    local _facPath = "FacPath"
-    local _stationPath = "StationPath"
-    local _listTargetPath = "ListTargetPath"
-    local _smokeTargetPath = "SmokeTargetPath"
-    local _lazeTargetPath = "LazeTargetPath"
-    local _artyTargetPath = "ArtyTargetPath"
-
-    --if dwac.facMenuDB[_groupId][_stationPath] then
-    if dwac.facMenuDB[_groupId][_facPath] then
-        -- Handle being On-Station
-        if dwac.facUnits[_unitId].onStation then
-            --if dwac.facMenuDB[_groupId][_stationPath] then
-            -- toggle the on/off station choice
-            if dwac.facMenuDB[_groupId][_stationPath][2] == _onStation then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])
-                dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _offStation,  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOffStation, dwac.facUnits[_unitId])
-            end
-            local isCurrentTarget = dwac.facUnits[_unitId]:currentTargetInList() -- blinks the current target position to pilot
-            -- TODO?  Add MGRS coords to target position?
-            if isCurrentTarget then
-                if dwac.facEnableSmokeTarget and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_smokeTargetPath] then
-                    dwac.facMenuDB[_groupId][_smokeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Smoke target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].smokeTarget, dwac.facUnits[_unitId])
-                end
-                if dwac.facEnableLazeTarget and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_lazeTargetPath] then
-                    dwac.facMenuDB[_groupId][_lazeTargetPath] = missionCommands.addCommandForGroup(_groupId, "Laze target",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].lazeTarget, dwac.facUnits[_unitId])
-                end
-                if dwac.facEnableArtilleryStrike and dwac.facUnits[_unitId].currentTarget and not dwac.facMenuDB[_groupId][_artyTargetPath] then
-                    dwac.facMenuDB[_groupId][_artyTargetPath] = missionCommands.addCommandForGroup(_groupId, "Call artillery",  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].callArty, dwac.facUnits[_unitId])
-                end
-
-                -- Recreate the detected targets on each cycle
-                if dwac.facMenuDB[_groupId][_listTargetPath] then
-                    missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
-                end
-                dwac.facMenuDB[_groupId][_listTargetPath] = missionCommands.addSubMenuForGroup(_groupId, "List targets",  dwac.facMenuDB[_groupId][_facPath])
-    
-                local _targets = dwac.facUnits[_unitId]:getTargets()
-                dwac.sortTargets(_targets)
-                dwac.limitTargets(dwac.facUnits[_unitId]) -- limit list to dwac.maxTargetsTracked
-                for _, _target in pairs(_targets) do
-                    missionCommands.addCommandForGroup(_groupId, _target.type, dwac.facMenuDB[_groupId][_listTargetPath], dwac.facUnits[_unitId].setCurrentTarget, dwac.facUnits[_unitId], {_target.id}) --dwac.facUnits[_unitId],
-                end
-            else
-                if dwac.facMenuDB[_groupId][_smokeTargetPath] then
-                    missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_smokeTargetPath])
-                    dwac.facMenuDB[_groupId][_smokeTargetPath] = nil
-                end
-                if dwac.facMenuDB[_groupId][_lazeTargetPath] then
-                    missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_lazeTargetPath])
-                    dwac.facMenuDB[_groupId][_lazeTargetPath] = nil
-                end
-                if dwac.facMenuDB[_groupId][_artyTargetPath] then
-                    missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_artyTargetPath])
-                    dwac.facMenuDB[_groupId][_artyTargetPath] = nil
-                end
-            end
-        else
-            if dwac.facMenuDB[_groupId][_stationPath] then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_stationPath])
-                dwac.facMenuDB[_groupId][_stationPath] = nil
-            end
-            if dwac.facMenuDB[_groupId][_listTargetPath] then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_listTargetPath])
-                dwac.facMenuDB[_groupId][_listTargetPath] = nil
-            end
-            if dwac.facMenuDB[_groupId][_smokeTargetPath] then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_smokeTargetPath])
-                dwac.facMenuDB[_groupId][_smokeTargetPath] = nil
-            end
-            if dwac.facMenuDB[_groupId][_lazeTargetPath] then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_lazeTargetPath])
-                dwac.facMenuDB[_groupId][_lazeTargetPath] = nil
-            end
-            if dwac.facMenuDB[_groupId][_artyTargetPath] then
-                missionCommands.removeItemForGroup(_groupId, dwac.facMenuDB[_groupId][_artyTargetPath])
-                dwac.facMenuDB[_groupId][_artyTargetPath] = nil
-            end
-            dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation,  dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
-        end
-    else
-        dwac.facMenuDB[_groupId][_facPath] = missionCommands.addSubMenuForGroup(_groupId, "FAC-A")
-
-        -- Laser Codes
-        local _laserPath = missionCommands.addSubMenuForGroup(_groupId, "Set laser code", dwac.facMenuDB[_groupId][_facPath])
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.One, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.One})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Two, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Two})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Three, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Three})
-        missionCommands.addCommandForGroup(_groupId, dwac.laserCodes.Four, _laserPath, dwac.setLaserCode, {dwac.facUnits[_unitId], dwac.laserCodes.Four})
-
-        -- Smoke Color
-        local _smokePath = missionCommands.addSubMenuForGroup(_groupId, "Set smoke color", dwac.facMenuDB[_groupId][_facPath])
-        missionCommands.addCommandForGroup(_groupId, "Red", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Red]})
-        missionCommands.addCommandForGroup(_groupId, "Orange", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.Orange]})
-        missionCommands.addCommandForGroup(_groupId, "White", _smokePath, dwac.setFACSmokeColor, {dwac.facUnits[_unitId], dwac.smokeColors[trigger.smokeColor.White]})
-
-        -- Current Settings
-        local _settings = missionCommands.addCommandForGroup(_groupId, "Current settings", dwac.facMenuDB[_groupId][_facPath], dwac.getCurrentSettings, {dwac.facUnits[_unitId]})
-
-        -- Station
-        dwac.facMenuDB[_groupId][_stationPath] = missionCommands.addCommandForGroup(_groupId, _onStation, dwac.facMenuDB[_groupId][_facPath], dwac.facUnits[_unitId].goOnStation, dwac.facUnits[_unitId])
-    end
-end
-dwac.addFACMenuFeatures = addFACMenuFeatures
-
-local function processSearchResults(_unit, args)
-    local _facUnit = args[1]
-    local _coalition = _facUnit.base:getCoalition()
-    local _facUnitPoint = _facUnit.base:getPosition().p
-    local _offsetFACAPos = { x = _facUnitPoint.x, y = _facUnitPoint.y, z = _facUnitPoint.z }
-
-    -- DSMC based
-    pcall(function()
-        if _unit ~= nil
-        and _unit:getLife() > 0
-        and _unit:isActive()
-        and _unit:getCoalition() ~= _coalition
-        and not _unit:inAir() then
-            local _tempPoint = _unit:getPoint()
-            local _offsetEnemyPos = { x = _tempPoint.x, y = _tempPoint.y + 2.0, z = _tempPoint.z } -- slightly above ground level
-            local landVisible = land.isVisible(_facUnitPoint,_offsetEnemyPos )
-            if land.isVisible(_offsetFACAPos,_offsetEnemyPos ) then
-                local _dist = dwac.getDistance(_facUnitPoint, _offsetEnemyPos)
-
-                if _facUnit:isSpotterVisible(_unit) and _dist < dwac.facMaxDetectionRange then
-                    table.insert(_facUnit.targets,{ id = _unit:getID(), unit=_unit, dist=_dist, type=_unit:getTypeName()})
-                end
-            end
-        end
-    end)
-end
-dwac.processSearchResults = processSearchResults
-
-local function scanForTargets(_unit)
-    timer.scheduleFunction(dwac.scanForTargets, _unit, timer.getTime() + dwac.scanForTargetFrequency)
-    -- Add the unit for tracking if needed
-    if not _unit or not _unit:isExist() then
-        if dwac.facUnits[_unitId] then
-            dwac.facUnits[_unitId] = nil
-        end
-        return
-    end
-    local _unitId = _unit:getID()
-     -- Handle targets
-    local _searchVolume = {
-        id = world.VolumeType.SPHERE,
-        params = {
-            point = dwac.facUnits[_unitId].base:getPoint(),
-            radius = dwac.facMaxDetectionRange
-        }
-    }
-    if dwac.facUnits[_unitId].onStation then
-        dwac.facUnits[_unitId].targets = {} -- reset list of tracked targets
-        -- world.searchObjects returns the number of items found
-        local foo = world.searchObjects(Object.Category.UNIT, _searchVolume, dwac.processSearchResults, {dwac.facUnits[_unitId]})
-    end
-end
-dwac.scanForTargets = scanForTargets
-
-local function sortTargets(_targets, _asc)    
-    if _asc or _asc == nil then -- default ascending
-        table.sort(_targets, function(unit1, unit2) return unit1.dist < unit2.dist end)
-    else
-        table.sort(_targets, function(unit1, unit2) return unit1.dist > unit2.dist end)
-    end
-end
-dwac.sortTargets = sortTargets
-
-local function limitTargets(_facUnit)
-    local _targets = {}
-    local _limit = 0
-    if #_facUnit.targets < dwac.maxTargetTracking then
-        _limit = #_facUnit.targets
-    else
-        _limit = dwac.maxTargetTracking
-    end
-    for i=1, _limit do
-        table.insert(_targets, _facUnit.targets[i])
-    end
-    _facUnit.targets = _targets
-end
-dwac.limitTargets = limitTargets
-
-local function getCurrentSettings(args)
-    local _facUnit = args[1]
-    local _groupId = dwac.getGroupId(_facUnit.base)
-    trigger.action.outTextForGroup(_groupId, "Laser code: " .. _facUnit.laserCode .. ", Smoke Color: " .. _facUnit.smokeColor, dwac.messageDuration, false)
-end
-dwac.getCurrentSettings = getCurrentSettings
-
-local function setLaserCode(args) -- args: {facUnit, code}
-    args[1].laserCode = args[2]
-    dwac.updateFACUnit(args[1])
-end
-dwac.setLaserCode = setLaserCode
-
-
-local function setFACSmokeColor(args) -- args: {facUnit, color}
-    args[1].smokeColor = args[2]
-    dwac.updateFACUnit(args[1])
-end
-dwac.setFACSmokeColor = setFACSmokeColor
-
-local function isFACCapable(_unit)
-    if _unit ~= nil then
-        for _, _unitName in pairs(dwac.facCapableUnits) do
-            if _unit:getTypeName() == _unitName then
-                return true
-            end
-        end
-    end
-    return false
-end
-dwac.isFACCapable = isFACCapable
-
--- Extracts all current player units that are FAC-A capable
-local function getCurrentFACCapableUnits()
-    local reply = {}
-    for _coalition = coalition.side.RED, coalition.side.BLUE do
-        local _players = coalition.getPlayers(_coalition) -- returns array of units run by players
-        if _players ~= nil then
-            for i = 1, #_players do
-                local _unit = _players[i]
-                if _unit ~= nil then
-                    if dwac.isFACCapable(_unit) then
-                        table.insert(reply, _unit)
-                    end
-                end
-            end
-        end
-    end
-    return reply
-end
-dwac.getCurrentFACCapableUnits = getCurrentFACCapableUnits
-
-local function updateFACUnit(_facUnit)
-    if _facUnit then
-        if _facUnit.base and _facUnit.base:isExist() then
-            dwac.facUnits[_facUnit.base:getID()] = _facUnit
-        end
-    end
-end
-dwac.updateFACUnit = updateFACUnit
-
---#endregion
-
-
---#region DWAC
-
--- ##########################
--- Properties
--- ##########################
-if dwac.enableLogging then
-    local _date = os.date("*t")
-    dwac.logger =
-        io.open(
-        lfs.writedir() .. "Logs/" .. baseName .. "_" .. _date.year .. "_" .. _date.month .. "_" .. _date.day .. ".log",
-        "a+"
-    )
-end
-
-dwac.uav = {
-	["frequency"] = 121,
-	["modulation"] = 0,
-	["groupId"] = nil,
-	["tasks"] = 
-	{
-	}, -- end of ["tasks"]
-	["route"] = 
-	{
-		["points"] = 
-		{
-			[1] = 
-			{
-				["alt"] = dwac.uavAltitude,
-				["type"] = "Turning Point",
-				["action"] = "Turning Point",
-				["alt_type"] = "BARO",
-				["form"] = "Turning Point",
-				["y"] = 601619.56776342,
-				["x"] = -292447.60082171,
-				["speed"] = dwac.uavSpeed,
-				["task"] = 
-				{
-					["id"] = "ComboTask",
-					["params"] = 
-					{
-						["tasks"] = 
-						{
-							[1] = 
-							{
-								["enabled"] = true,
-								["auto"] = false,
-								["id"] = "Orbit",
-								["number"] = 2,
-								["params"] = 
-								{
-									["altitude"] = dwac.uavAltitude,
-									["pattern"] = "Circle",
-									["speed"] = dwac.uavSpeed,
-								}, -- end of ["params"]
-							}, -- end of [2]
-						}, -- end of ["tasks"]
-					}, -- end of ["params"]
-				}, -- end of ["task"]
-			}
-		}, -- end of ["points"]
-	}, -- end of ["route"]
-	["hidden"] = false,
-	["units"] = 
-	{
-		[1] = 
-		{
-			["alt"] = dwac.uavAltitude,
-			["hardpoint_racks"] = false,
-			["alt_type"] = "BARO",
-			["livery_id"] = nil,
-			["skill"] = "Random",
-			["speed"] = dwac.uavSpeed,
-			["AddPropAircraft"] = 
-			{
-			}, -- end of ["AddPropAircraft"]
-			["type"] = "MQ-9 Reaper",
-			["unitId"] = 10,
-			["psi"] = 1.7703702498393,
-			["parking_id"] = "30",
-			["x"] = -282214.0,
-			["name"] = "Aerial-1-1",
-			["payload"] = 
-			{
-				["fuel"] = 1000
-			}, -- end of ["payload"]
-			["onboard_num"] = "011",
-			["callsign"] = 
-			{
-				[1] = 1,
-				[2] = 1,
-				["name"] = "Enfield11",
-				[3] = 1,
-			}, -- end of ["callsign"]
-			["heading"] = -1.7703702498393,
-			["y"] = 645912.000,
-		} -- end of [1]
-	}, -- end of ["units"]
-	["y"] = 645912.000,
-	["radioSet"] = false,
-	["name"] = "Aerial-1",
-	["communication"] = true,
-	["x"] = -282214.000,
-	["start_time"] = 0,
-	["task"] = "R",
-	["uncontrolled"] = false,
-}
-
--- ##########################
--- Methods
--- ##########################
--- *** Logging ***
-local function writeDebug(debugLog)
-    if dwac.enableLogging then
-        dwac.logger:write(dwac.getLogTimeStamp() .. debugLog .. "\n")
-    end
-end
-dwac.writeDebug = writeDebug
-dwac.uavInFlight = {
-    [coalition.side.RED] = false,
-    [coalition.side.BLUE] = false,
-}
+dwac.IsSpotterVisible = IsSpotterVisible
 
 local function getMarkerRequest(requestText)
     local lowerText = string.lower(requestText)
@@ -929,7 +596,7 @@ dwac.setMapSmoke = setMapSmoke
 
 local function setMapIllumination(vector)
     if dwac.illuminationUnits == nil or dwac.illuminationUnits < 0 then
-        dwac.writeDebug("dwac.illuminationUnits is nil or negative")
+        _DATABASE:E( "dwac.illuminationUnits is nil or negative" )
         return false
     end
 
@@ -938,7 +605,7 @@ local function setMapIllumination(vector)
         local _aglVector = {x = vector.x, y = land.getHeight({x = vector.x, y = vector.z}) + dwac.mapIlluminationAltitude, z = vector.z}
 
         local lat, lon, alt = coord.LOtoLL(_aglVector)
-        dwac.writeDebug("Illumination requested: Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt)
+        _DATABASE:E( "Illumination requested: Lat: " .. lat .. " Lon: " .. lon .. " Alt: " .. alt)
         if dwac.illuminationUnits == 1 then
             trigger.action.illuminationBomb(_aglVector, dwac.illuminationPower)
         else
@@ -1011,7 +678,7 @@ local function setMapUAV(panel)
             coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.uav)
             trigger.action.outTextForCoalition(panel.coalition, "Launching an MQ-9 Reaper from " .. nearestAirfield:getName(), dwac.messageDuration, false)
             local lat, lon, alt = coord.LOtoLL(vector)
-            dwac.writeDebug("User " .. _playerUnit:getPlayerName() .. " requested MQ-9 for Lat: " .. lat .. " Lon: " .. lon)
+            _DATABASE:E( "User " .. _playerUnit:getPlayerName() .. " requested MQ-9 for Lat: " .. lat .. " Lon: " .. lon )
             dwac.uavInFlight[panel.coalition] = true
         end
     end, nil, timer.getTime() + 5)
@@ -1020,46 +687,81 @@ end
 dwac.setMapUAV = setMapUAV
 
 local function showVersion()
-    trigger.action.outText(baseName .. " version: " .. dwac.version, dwac.messageDuration, false)
+    MESSAGE:New( "Version: " .. dwac.version, 5, "DWAC Load" ):ToAll()
 end
 dwac.showVersion = showVersion
 
-local function getLogTimeStamp()
-    return os.date("%H:%M:%S") .. " - " .. baseName .. ": "
-end
-dwac.getLogTimeStamp = getLogTimeStamp
-
--- highest level DWAC F10 menu addition
---   add calls to functions which add specific menu features here to keep it clean
---   REMEMBER to add clean-up to removeF10MenuOptions()
-local function addF10MenuOptions()
-    timer.scheduleFunction(dwac.addF10MenuOptions, nil, timer.getTime() + dwac.f10MenuUpdateFrequency)
-    -- FAC-A
-    local _units = dwac.getCurrentFACCapableUnits()
-    if _units then
-        for _, _unit in pairs(_units) do
-            dwac.addFACMenuFeatures(_unit)
-        end
-    end
-end
-dwac.addF10MenuOptions = addF10MenuOptions
-
 local function missionStopHandler(event)
-    dwac.writeDebug("Closing event handlers")
+    _DATABASE:E( "DWAC: Closing event handlers")
     if mapIlluminationRequestHandler then
         world.removeEventHandler(mapIlluminationRequestHandler)
     end
     if dwac.mapSmokeRequestHandler then
         world.removeEventHandler(mapSmokeRequestHandler)
     end
-    if dwac.logger then
-        dwac.logger:write(dwac.getLogTimeStamp() .. "Mission End.  Closing logger.\n")
-        dwac.logger:flush()
-        dwac.logger:close()
-        dwac.logger = nil
-    end
 end
 dwac.missionStopHandler = missionStopHandler
+
+local function smokePoint(vector, smokeColor)
+    vector.y = vector.y + 2.0
+    local lat, lon, alt = coord.LOtoLL(vector)
+    return pcall(function()
+        color = string.lower(smokeColor)
+        if color == "green" then
+            trigger.action.smoke(vector, trigger.smokeColor.Green)
+            return true
+        elseif color == "red" then
+            trigger.action.smoke(vector, trigger.smokeColor.Red)
+            return true
+        elseif color == "white" then
+            trigger.action.smoke(vector, trigger.smokeColor.White)
+            return true
+        elseif color == "orange" then
+            trigger.action.smoke(vector, trigger.smokeColor.Orange)
+            return true
+        elseif color == "blue" then
+            trigger.action.smoke(vector, trigger.smokeColor.Blue)
+            return true
+        else
+            return false
+        end
+    end)
+end
+dwac.smokePoint = smokePoint
+
+-- returns the nearest coalition airbase for a given point
+local function getNearestAirfield(_point, _coalition)
+    local nearestAirfield = nil
+    local currentABDistance = 0
+    local airbases = coalition.getAirbases(_coalition)
+    for _, _airbase in pairs(airbases) do
+        local abPoint = _airbase:getPoint()
+        local distance = dwac.getDistance(_point, abPoint)
+        local desc = _airbase:getDesc()
+        -- No helipad or destroyed AB
+        local abNotHelipad = desc["category"] ~= Airbase.Category.HELIPAD and desc["life"] > 0
+        if abNotHelipad and (distance < currentABDistance or currentABDistance == 0) then
+            currentABDistance = distance
+            nearestAirfield = _airbase
+        end
+    end
+    return nearestAirfield
+end
+dwac.getNearestAirfield = getNearestAirfield
+
+local function getRadialPoints(_sourceVec, _radius, _count)
+    -- https://math.stackexchange.com/questions/1030655/how-do-we-find-points-on-a-circle-equidistant-from-each-other
+    local points = {}
+    for i=0, _count do
+        local _vec3 = {}
+        _vec3.y = _sourceVec.y -- same altitude
+        _vec3.x = _sourceVec.x + _radius * math.cos(2 * math.pi * i / _count)
+        _vec3.z = _sourceVec.z + _radius * math.sin(2 * math.pi * i / _count)
+        table.insert(points, _vec3)
+    end
+    return points
+end
+dwac.getRadialPoints = getRadialPoints
 
 -- ##########################
 -- EVENT HANDLING
@@ -1104,18 +806,5 @@ function dwac.dwacEventHandler:onEvent(event)
 end
 world.addEventHandler(dwac.dwacEventHandler)
 
-trigger.action.outText(baseName .. " version: " .. dwac.version, dwac.messageDuration, false)
-dwac.addF10MenuOptions()
-dwac.pruneFACUnits()
-
---#endregion
-
-dwac.writeDebug("DWAC version: " .. dwac.version .. " Active")
-
-local foonit = Unit.getByName("Ground-9-1")
--- local foonitDesc = foonit:getDesc()
--- dwac.writeDebug("Unit: " .. dwac.dump(foonitDesc))
--- local foonitAmmo = foonit:getAmmo()
--- dwac.writeDebug("Ammo: " .. dwac.dump(foonitAmmo))
-
-return dwac
+dwac.showVersion()
+dwac.InitFacA()
