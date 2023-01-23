@@ -32,33 +32,46 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.0"
+dwac.version = "0.4.1a"
 
 
 -- To enable/disable features set their state here
 dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
 dwac.enableMapUAV = true
-dwac.uavAltitude = 1200 -- limits opfor units visible to the uav
+dwac.enableMapREPAIR = true
+
+-- UAV
+dwac.uavAltitude = 1200             -- limits opfor units visible to the uav
 dwac.uavSpeed = 111.000
+dwac.uavType = "MQ-9 Reaper"        -- "MQ-9 Reaper" or "RQ-1A Predator"
+dwac.uavLimit = false               -- Limit UAV once (true) unlimited (false)
 
-dwac.mapIlluminationAltitude = 700 -- Altitude(meters AGL) the illumination bomb appears determines duration (300sec max)/effectiveness
-dwac.illuminationPower = 1000000 -- 1 to 1000000(max) brightness
-dwac.illuminationUnits = 3 -- number of illum bombs deployed in a star pattern
-dwac.illuminationRadius = 500 -- units deployed in meters from target point
+-- Repair
+dwac.repairAltitude = 1200          -- limits opfor units visible to the repair
+dwac.repairSpeed = 111.000
+dwac.repairType = "RQ-1A Predator"     -- CH-47D
+dwac.repairLimit = false            -- Limit Repair once (true) unlimited (false)
 
+-- Illumination
+dwac.mapIlluminationAltitude = 700  -- Altitude(meters AGL) the illumination bomb appears determines duration (300sec max)/effectiveness
+dwac.illuminationPower = 1000000    -- 1 to 1000000(max) brightness
+dwac.illuminationUnits = 3          -- number of illum bombs deployed in a star pattern
+dwac.illuminationRadius = 500       -- units deployed in meters from target point
+
+-- FAC
 dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
 dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target (controls appearance in F10 menu)
 dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
 
 
-dwac.facMaxEngagmentRange = 4300 -- meters
+dwac.facMaxEngagmentRange = 4300    -- meters
 dwac.facMaxDetectionRange = 6000
 dwac.maxTargetTracking = 5
-dwac.scanForTargetFrequency = 15 -- longer period reduces the chance of failed target selection due to menu update collision
+dwac.scanForTargetFrequency = 15    -- longer period reduces the chance of failed target selection due to menu update collision
 dwac.displayCurrentTargetFrequency = 5
 
-dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4}
+dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4, REPAIR = 5}
 dwac.messageDuration = 20 -- seconds
 dwac.facAMenuTexts = {
   baseMenu = "FAC-A",
@@ -91,6 +104,7 @@ dwac.facSmokeColors = {
   "Blue"
 }
 
+-- UAV Unit details
 dwac.uav = {
   ["frequency"] = 121,
   ["modulation"] = 0,
@@ -152,12 +166,12 @@ dwac.uav = {
       ["AddPropAircraft"] = 
       {
       }, -- end of ["AddPropAircraft"]
-      ["type"] = "MQ-9 Reaper",
+      ["type"] = dwac.uavType,
       ["unitId"] = 10,
       ["psi"] = 1.7703702498393,
       ["parking_id"] = "30",
       ["x"] = -282214.0,
-      ["name"] = "Aerial-1-1",
+      ["name"] = "Lightyear-1-1",
       ["payload"] = 
       {
         ["fuel"] = 1000
@@ -167,7 +181,7 @@ dwac.uav = {
       {
         [1] = 1,
         [2] = 1,
-        ["name"] = "Enfield11",
+        ["name"] = "Lightyear11",
         [3] = 1,
       }, -- end of ["callsign"]
       ["heading"] = -1.7703702498393,
@@ -176,7 +190,7 @@ dwac.uav = {
   }, -- end of ["units"]
   ["y"] = 645912.000,
   ["radioSet"] = false,
-  ["name"] = "Aerial-1",
+  ["name"] = "Lightyear-1",
   ["communication"] = true,
   ["x"] = -282214.000,
   ["start_time"] = 0,
@@ -188,10 +202,110 @@ dwac.uavInFlight = {
     [coalition.side.BLUE] = false,
 }
 
+-- Repair Unit details
+dwac.repair = {
+  ["frequency"] = 121,
+  ["modulation"] = 0,
+  ["groupId"] = nil,
+  ["tasks"] = 
+  {
+  }, -- end of ["tasks"]
+  ["route"] = 
+  {
+    ["points"] = 
+    {
+      [1] = 
+      {
+        ["alt"] = dwac.repairAltitude,
+        ["type"] = "Turning Point",
+        ["action"] = "Turning Point",
+        ["alt_type"] = "BARO",
+        ["form"] = "Turning Point",
+        ["y"] = 601619.56776342,
+        ["x"] = -292447.60082171,
+        ["speed"] = dwac.repairSpeed,
+        ["task"] = 
+        {
+          ["id"] = "ComboTask",
+          ["params"] = 
+          {
+            ["tasks"] = 
+            {
+              [1] = 
+              {
+                ["enabled"] = true,
+                ["auto"] = false,
+                ["id"] = "Orbit",
+                ["number"] = 2,
+                ["params"] = 
+                {
+                  ["altitude"] = dwac.repairAltitude,
+                  ["pattern"] = "Circle",
+                  ["speed"] = dwac.repairSpeed,
+                }, -- end of ["params"]
+              }, -- end of [2]
+            }, -- end of ["tasks"]
+          }, -- end of ["params"]
+        }, -- end of ["task"]
+      }
+    }, -- end of ["points"]
+  }, -- end of ["route"]
+  ["hidden"] = false,
+  ["units"] = 
+  {
+    [1] = 
+    {
+      ["alt"] = dwac.repairAltitude,
+      ["hardpoint_racks"] = false,
+      ["alt_type"] = "BARO",
+      ["livery_id"] = nil,
+      ["skill"] = "Random",
+      ["speed"] = dwac.repairSpeed,
+      ["AddPropAircraft"] = 
+      {
+      }, -- end of ["AddPropAircraft"]
+      ["type"] = dwac.repairType,
+      ["unitId"] = 10,
+      ["psi"] = 1.7703702498393,
+      ["parking_id"] = "30",
+      ["x"] = -282214.0,
+      ["name"] = "Lightyear-1-2",
+      ["payload"] = 
+      {
+        ["fuel"] = 1000
+      }, -- end of ["payload"]
+      ["onboard_num"] = "012",
+      ["callsign"] = 
+      {
+        [1] = 1,
+        [2] = 1,
+        ["name"] = "Lightyear12",
+        [3] = 1,
+      }, -- end of ["callsign"]
+      ["heading"] = -1.7703702498393,
+      ["y"] = 645912.000,
+    } -- end of [1]
+  }, -- end of ["units"]
+  ["y"] = 645912.000,
+  ["radioSet"] = false,
+  ["name"] = "Lightyear-2",
+  ["communication"] = true,
+  ["x"] = -282214.000,
+  ["start_time"] = 0,
+  ["task"] = "R",
+  ["uncontrolled"] = false,
+}
+dwac.repairInFlight = {
+    [coalition.side.RED] = false,
+    [coalition.side.BLUE] = false,
+}
+
 -- ##########################
 -- Methods
 -- ##########################
 
+
+-- Function FAC Init
 local function InitFacA()
   env.info( "InitFacA()" )
   for _, _client in pairs( _DATABASE.CLIENTS ) do
@@ -230,6 +344,7 @@ local function InitFacA()
 end
 dwac.InitFacA = InitFacA
 
+-- Function FAC Unit
 local function IsFacAUnit( _type )
   for _, _name in pairs( dwac.facUnits ) do
     if _name:gsub( "%s+", "" ) == _type then 
@@ -240,6 +355,7 @@ local function IsFacAUnit( _type )
 end
 dwac.IsFacAUnit = IsFacAUnit
 
+-- Function FAC Base
 local function SetupBaseFacAMenu( _client )
   local _group = GROUP:FindByName( _client.GroupName )
   _client.FacAMenu = MENU_GROUP:New( _group, dwac.facAMenuTexts.baseMenu )
@@ -563,6 +679,8 @@ function IsSpotterVisible( _client, _target )
 end
 dwac.IsSpotterVisible = IsSpotterVisible
 
+
+-- Read markers F10 map
 local function getMarkerRequest(requestText)
     local lowerText = string.lower(requestText)
     local isSmokeRequest = lowerText:match("^%s*-smoke;%a+%s*$")
@@ -580,6 +698,11 @@ local function getMarkerRequest(requestText)
         return dwac.MapRequest.UAV
     end
 
+    local isREPAIRrequest = lowerText:match("^%s*-repair%s*$")
+    if isREPAIRrequest then
+        return dwac.MapRequest.REPAIR
+    end
+	
     local isVersionRequest = lowerText:match("^-version%s*$")
     if isVersionRequest then
         return dwac.MapRequest.VERSION
@@ -594,6 +717,7 @@ local function setMapSmoke(requestText, vector)
 end
 dwac.setMapSmoke = setMapSmoke
 
+-- Function Illumination
 local function setMapIllumination(vector)
     if dwac.illuminationUnits == nil or dwac.illuminationUnits < 0 then
         _DATABASE:E( "dwac.illuminationUnits is nil or negative" )
@@ -620,8 +744,9 @@ local function setMapIllumination(vector)
 end
 dwac.setMapIllumination = setMapIllumination
 
+-- Function UAV active or not
 local function uavSearch(_unit, args)
-    if _unit:getTypeName() == "MQ-9 Reaper" and
+    if _unit:getTypeName() == dwac.uavType and
         _unit:getCoalition() == args[1] and
         _unit:inAir() then
         dwac.uavInFlight[args[1]] = true -- Probably a problem.  Coalition collision?
@@ -629,6 +754,7 @@ local function uavSearch(_unit, args)
 end
 dwac.uavSearch = uavSearch
 
+-- Function UAV Spawn
 local function setMapUAV(panel)
     local vector = panel.pos
     local _author = panel.author
@@ -676,16 +802,87 @@ local function setMapUAV(panel)
             dwac.uav["route"]["points"][1].y = vector.z
 
             coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.uav)
-            trigger.action.outTextForCoalition(panel.coalition, "Launching an MQ-9 Reaper from " .. nearestAirfield:getName(), dwac.messageDuration, false)
+            trigger.action.outTextForCoalition(panel.coalition, "Launching an UAV from " .. nearestAirfield:getName(), dwac.messageDuration, false)
             local lat, lon, alt = coord.LOtoLL(vector)
-            _DATABASE:E( "User " .. _playerUnit:getPlayerName() .. " requested MQ-9 for Lat: " .. lat .. " Lon: " .. lon )
-            dwac.uavInFlight[panel.coalition] = true
+            _DATABASE:E( "User " .. _playerUnit:getPlayerName() .. " requested UAV for Lat: " .. lat .. " Lon: " .. lon )
+            dwac.uavInFlight[panel.coalition] = dwac.uavLimit
         end
     end, nil, timer.getTime() + 5)
     return true
 end
 dwac.setMapUAV = setMapUAV
+-- End Function UAV
 
+-- Function REPAIR active or not
+local function repairSearch(_unit, args)
+    if _unit:getTypeName() == dwac.repairType and
+        _unit:getCoalition() == args[1] and
+        _unit:inAir() then
+        dwac.repairInFlight[args[1]] = true -- Probably a problem.  Coalition collision?
+    end
+end
+dwac.repairSearch = repairSearch
+
+-- Function REPAIR Spawn
+local function setMapREPAIR(panel)
+    local vector = panel.pos
+    local _author = panel.author
+    local _playerUnit = nil
+    for _, _group in pairs(coalition.getGroups(panel.coalition)) do
+        for _, _unit in pairs(_group:getUnits()) do
+            if _unit:getPlayerName() == _author then
+                _playerUnit = _unit
+                break
+            end
+        end
+        if _playerUnit ~= nil then
+            break
+        end
+    end
+    if _playerUnit == nil then
+        return false
+    end
+    local _country = _playerUnit:getCountry()
+    local _vol = {
+        id = world.VolumeType.SPHERE,
+        params = {
+            point = vector,
+            radius = 150000 -- 150 kilometer radius
+        }
+    }
+    if dwac.repairInFlight[panel.coalition] then
+        return true -- return without doing anything, but clear the marker
+    end
+    world.searchObjects(Object.Category.UNIT, _vol, dwac.repairSearch, {panel.coalition})
+
+    -- delay to let DCS locate a REPAIR or not
+    timer.scheduleFunction(function()
+        if not dwac.repairInFlight[panel.coalition] then
+            -- get nearest airfield to vector
+            local nearestAirfield = dwac.getNearestAirfield(vector, panel.coalition)
+            local nearestAirfieldPoint = nearestAirfield:getPoint()
+            -- spawn REPAIR at altitude with directions to fly to vector and begin orbit.
+            -- Set REPAIR position
+            dwac.repair.x = nearestAirfieldPoint.x
+            dwac.repair.y = nearestAirfieldPoint.z  -- don't ask me why
+            dwac.repair["units"][1].x = nearestAirfieldPoint.x
+            dwac.repair["units"][1].y = nearestAirfieldPoint.z
+            dwac.repair["route"]["points"][1].x = vector.x
+            dwac.repair["route"]["points"][1].y = vector.z
+
+            coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.repair)
+            trigger.action.outTextForCoalition(panel.coalition, "Launching support from " .. nearestAirfield:getName(), dwac.messageDuration, false)
+            local lat, lon, alt = coord.LOtoLL(vector)
+            _DATABASE:E( "User " .. _playerUnit:getPlayerName() .. " requested REPAIRS for Lat: " .. lat .. " Lon: " .. lon )
+            dwac.repairInFlight[panel.coalition] = dwac.repairLimit
+        end
+    end, nil, timer.getTime() + 5)
+    return true
+end
+dwac.setMapREPAIR = setMapREPAIR
+-- End Function REPAIR
+
+-- Function Version
 local function showVersion()
     MESSAGE:New( "Version: " .. dwac.version, 5, "DWAC Load" ):ToAll()
 end
@@ -702,6 +899,7 @@ local function missionStopHandler(event)
 end
 dwac.missionStopHandler = missionStopHandler
 
+-- Function Smoke
 local function smokePoint(vector, smokeColor)
     vector.y = vector.y + 2.0
     local lat, lon, alt = coord.LOtoLL(vector)
@@ -792,6 +990,11 @@ function dwac.dwacEventHandler:onEvent(event)
                     break
                 elseif dwac.enableMapUAV and markType == dwac.MapRequest.UAV then
                     if dwac.setMapUAV(panel) then
+                        timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
+                    end
+                    break
+				elseif dwac.enableMapREPAIR and markType == dwac.MapRequest.REPAIR then
+                    if dwac.setMapREPAIR(panel) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     end
                     break
