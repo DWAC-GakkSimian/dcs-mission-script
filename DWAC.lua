@@ -2,16 +2,24 @@
     Selectable mission features
         - SMOKE: Map targeted (Idea stolen from Tupper of Rotorheads)
             Usage: On the F10 map, place a comment circle with text of "-smoke;<color>" (red|orange|green|white|blue) and minimize
+			
         - ILLUMINATION: Map targeted
             Usage: On the F10 map, place a comment circle with text of "-flare" and minimize
+			
         - FAC-A: (Currently limited to SA-342 Gazelles)
             - Smoke target
             - Laze target
             - Arty target
+			
         - UAV: Map targeted
-            Usage: On the F10 map, place a comment circle with text of "-uav" and minimize.  Limit one(1) MQ-9 Reaper in flight.
+            Usage: On the F10 map, place a comment circle with text of "-uav" and minimize.  Limit one(1) Optional MQ-9 Reaper in flight.
+			
+        - REPAIR: Map targeted
+            Usage: On the F10 map, place a comment circle with text of "-repair" and minimize.  Limit one(1) Optional CH-47D in flight.
+			
         - VERSION: Map activated
             Usage: On the F10 map, place a comment circle with text of "-version" to see the current version of DWAC
+			
     The MIT License (MIT)
     Copyright © 2022 gakksimian@gmail.com
     Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), 
@@ -32,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.1a"
+dwac.version = "0.4.1c"
 
 
 -- To enable/disable features set their state here
@@ -40,18 +48,27 @@ dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
 dwac.enableMapUAV = true
 dwac.enableMapREPAIR = true
+dwac.aiSkill = "Excellent"          -- Random (Random), Excellent (Ace)
 
 -- UAV
 dwac.uavAltitude = 1200             -- limits opfor units visible to the uav
 dwac.uavSpeed = 111.000
 dwac.uavType = "MQ-9 Reaper"        -- "MQ-9 Reaper" or "RQ-1A Predator"
 dwac.uavLimit = false               -- Limit UAV once (true) unlimited (false)
+dwac.uavName = "Reaper-1-1"			-- ? Group name
+dwac.uavCallsign = "Reaper"   		-- Call sign shown as enfield11
+dwac.uavGroup = "UAV"        		-- Group name
+dwac.uavNum = "113"              	-- Support number
 
 -- Repair
-dwac.repairAltitude = 1200          -- limits opfor units visible to the repair
-dwac.repairSpeed = 111.000
-dwac.repairType = "RQ-1A Predator"     -- CH-47D
+dwac.repairAltitude = 200           -- 
+dwac.repairSpeed = 100.000            -- meters/second (speed is x 3.6 to get km/h) 74 is approx 266,4 km/h
+dwac.repairType = "CH-47D"          -- CH-47D
 dwac.repairLimit = false            -- Limit Repair once (true) unlimited (false)
+dwac.repairName = "Lightyear-1-1"	-- ? Group name
+dwac.repairCallsign = "Lightyear"   -- Call sign shown as enfield11
+dwac.repairGroup = "Support"        -- Group name
+dwac.repairNum = "112"              -- Support number
 
 -- Illumination
 dwac.mapIlluminationAltitude = 700  -- Altitude(meters AGL) the illumination bomb appears determines duration (300sec max)/effectiveness
@@ -73,6 +90,7 @@ dwac.displayCurrentTargetFrequency = 5
 
 dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4, REPAIR = 5}
 dwac.messageDuration = 20 -- seconds
+
 dwac.facAMenuTexts = {
   baseMenu = "FAC-A",
   smokeTarget = "Smoke target",
@@ -112,91 +130,92 @@ dwac.uav = {
   ["tasks"] = 
   {
   }, -- end of ["tasks"]
-  ["route"] = 
-  {
-    ["points"] = 
-    {
-      [1] = 
-      {
-        ["alt"] = dwac.uavAltitude,
-        ["type"] = "Turning Point",
-        ["action"] = "Turning Point",
-        ["alt_type"] = "BARO",
-        ["form"] = "Turning Point",
-        ["y"] = 601619.56776342,
-        ["x"] = -292447.60082171,
-        ["speed"] = dwac.uavSpeed,
-        ["task"] = 
-        {
-          ["id"] = "ComboTask",
-          ["params"] = 
-          {
-            ["tasks"] = 
-            {
-              [1] = 
-              {
-                ["enabled"] = true,
-                ["auto"] = false,
-                ["id"] = "Orbit",
-                ["number"] = 2,
-                ["params"] = 
-                {
-                  ["altitude"] = dwac.uavAltitude,
-                  ["pattern"] = "Circle",
-                  ["speed"] = dwac.uavSpeed,
-                }, -- end of ["params"]
-              }, -- end of [2]
-            }, -- end of ["tasks"]
-          }, -- end of ["params"]
-        }, -- end of ["task"]
-      }
-    }, -- end of ["points"]
-  }, -- end of ["route"]
+	["route"] = 
+	{
+		["points"] = 
+		{
+			[1] = 
+			{
+				["alt"] = dwac.uavAltitude,
+        		["type"] = "Turning Point",
+        		["action"] = "Turning Point",
+        		["alt_type"] = "BARO",
+        		["form"] = "Turning Point",
+        		["y"] = 601619.56776342,
+        		["x"] = -292447.60082171,
+        		--["speed"] = dwac.uavSpeed,
+        		["task"] = 
+				{
+					["id"] = "ComboTask",
+					["params"] = 
+					{
+						["tasks"] = 
+						{
+							[1] = 
+							{
+            					["enabled"] = true,
+            					["auto"] = false,
+            					["id"] = "Orbit",
+            					["number"] = 2,
+            					["params"] = 
+								{
+									["altitude"] = dwac.uavAltitude,
+									["pattern"] = "Circle",
+									["speed"] = dwac.uavSpeed,
+								}, -- end of ["params"]
+							}, -- end of [1]
+						}, -- end of ["tasks"]
+					}, -- end of ["params"]
+				}, -- end of ["task"]
+			},
+		}, -- end of ["points"]
+	}, -- end of ["route"]
   ["hidden"] = false,
   ["units"] = 
   {
     [1] = 
-    {
-      ["alt"] = dwac.uavAltitude,
-      ["hardpoint_racks"] = false,
-      ["alt_type"] = "BARO",
-      ["livery_id"] = nil,
-      ["skill"] = "Random",
-      ["speed"] = dwac.uavSpeed,
-      ["AddPropAircraft"] = 
-      {
-      }, -- end of ["AddPropAircraft"]
-      ["type"] = dwac.uavType,
-      ["unitId"] = 10,
-      ["psi"] = 1.7703702498393,
-      ["parking_id"] = "30",
-      ["x"] = -282214.0,
-      ["name"] = "Lightyear-1-1",
-      ["payload"] = 
-      {
-        ["fuel"] = 1000
-      }, -- end of ["payload"]
-      ["onboard_num"] = "011",
-      ["callsign"] = 
-      {
-        [1] = 1,
-        [2] = 1,
-        ["name"] = "Lightyear11",
-        [3] = 1,
-      }, -- end of ["callsign"]
-      ["heading"] = -1.7703702498393,
-      ["y"] = 645912.000,
-    } -- end of [1]
+	{
+		["alt"] = dwac.uavAltitude,
+		["hardpoint_racks"] = false,
+		["alt_type"] = "BARO",
+		["livery_id"] = nil,
+		["skill"] = dwac.aiSkill,
+		["speed"] = dwac.uavSpeed,
+		["AddPropAircraft"] = 
+			{
+			}, -- end of ["AddPropAircraft"]
+		["type"] = dwac.uavType,
+		["unitId"] = 10,
+		["psi"] = 1.7703702498393,
+		["parking_id"] = "30",
+		["x"] = -282214.0,
+		["name"] = dwac.uavName,
+		["payload"] = 
+			{
+				["fuel"] = 1000
+			}, -- end of ["payload"]
+		["onboard_num"] = dwac.uavNum,
+		["callsign"] = 
+		{
+			[1] = 1,
+			[2] = 1,
+			[3] = 1,
+			["name"] = dwac.uavCallsign,
+		}, -- end of ["callsign"]
+		["heading"] = -1.7703702498393,
+		["y"] = 645912.000,
+	} -- end of [1]
   }, -- end of ["units"]
   ["y"] = 645912.000,
   ["radioSet"] = false,
-  ["name"] = "Lightyear-1",
+  ["name"] = dwac.uavGroup,
   ["communication"] = true,
   ["x"] = -282214.000,
   ["start_time"] = 0,
   ["task"] = "R",
   ["uncontrolled"] = false,
 }
+
 dwac.uavInFlight = {
     [coalition.side.RED] = false,
     [coalition.side.BLUE] = false,
@@ -204,97 +223,104 @@ dwac.uavInFlight = {
 
 -- Repair Unit details
 dwac.repair = {
-  ["frequency"] = 121,
-  ["modulation"] = 0,
-  ["groupId"] = nil,
-  ["tasks"] = 
-  {
-  }, -- end of ["tasks"]
-  ["route"] = 
-  {
-    ["points"] = 
+    ["modulation"] = 0,
+    ["tasks"] = 
+		{
+		}, -- end of ["tasks"]
+    ["radioSet"] = false,
+    ["task"] = "Transport",
+    ["uncontrolled"] = false,
+    ["route"] =
+	{
+		["points"] = 
+		{
+			[1] = 
+			{
+				["alt"] = dwac.repairAltitude,
+				["action"] = "Turning Point",
+				["alt_type"] = "RADIO",
+				["speed"] = dwac.repairSpeed,
+				["task"] = 
+				{
+					["id"] = "ComboTask",
+					["params"] = 
+					{
+						["tasks"] = 
+						{
+							[1] = 
+							{
+								["number"] = 1,
+								["auto"] = false,
+								["id"] = "Land",
+								["enabled"] = true,
+								["params"] = 
+								{
+									["y"] = 601619.56776342,  -- Parameter to change for waypoint
+									["x"] = -292447.60082171, -- Parameter to change for waypoint
+									["duration"] = 300,
+									["durationFlag"] = false,
+								}, 	-- end of ["params"]
+							}, -- end of [1]
+						}, -- end of ["tasks"]
+					}, -- end of ["params"]
+				}, -- end of ["task"]
+				["type"] = "Turning Point",
+				["ETA"] = 0,
+				["ETA_locked"] = false,
+				["y"] = 74254.519022107,
+				["x"] = 8869.434313923,
+				["formation_template"] = "",
+				["speed_locked"] = true,
+			}, -- end of [1]
+		}, -- end of ["points"]
+	}, -- end of ["route"]
+    ["groupId"] = 1,
+    ["hidden"] = false,
+    ["units"] = 
     {
-      [1] = 
-      {
-        ["alt"] = dwac.repairAltitude,
-        ["type"] = "Turning Point",
-        ["action"] = "Turning Point",
-        ["alt_type"] = "BARO",
-        ["form"] = "Turning Point",
-        ["y"] = 601619.56776342,
-        ["x"] = -292447.60082171,
-        ["speed"] = dwac.repairSpeed,
-        ["task"] = 
-        {
-          ["id"] = "ComboTask",
-          ["params"] = 
-          {
-            ["tasks"] = 
-            {
-              [1] = 
-              {
-                ["enabled"] = true,
-                ["auto"] = false,
-                ["id"] = "Orbit",
-                ["number"] = 2,
-                ["params"] = 
-                {
-                  ["altitude"] = dwac.repairAltitude,
-                  ["pattern"] = "Circle",
-                  ["speed"] = dwac.repairSpeed,
-                }, -- end of ["params"]
-              }, -- end of [2]
-            }, -- end of ["tasks"]
-          }, -- end of ["params"]
-        }, -- end of ["task"]
-      }
-    }, -- end of ["points"]
-  }, -- end of ["route"]
-  ["hidden"] = false,
-  ["units"] = 
-  {
-    [1] = 
-    {
-      ["alt"] = dwac.repairAltitude,
-      ["hardpoint_racks"] = false,
-      ["alt_type"] = "BARO",
-      ["livery_id"] = nil,
-      ["skill"] = "Random",
-      ["speed"] = dwac.repairSpeed,
-      ["AddPropAircraft"] = 
-      {
-      }, -- end of ["AddPropAircraft"]
-      ["type"] = dwac.repairType,
-      ["unitId"] = 10,
-      ["psi"] = 1.7703702498393,
-      ["parking_id"] = "30",
-      ["x"] = -282214.0,
-      ["name"] = "Lightyear-1-2",
-      ["payload"] = 
-      {
-        ["fuel"] = 1000
-      }, -- end of ["payload"]
-      ["onboard_num"] = "012",
-      ["callsign"] = 
-      {
-        [1] = 1,
-        [2] = 1,
-        ["name"] = "Lightyear12",
-        [3] = 1,
-      }, -- end of ["callsign"]
-      ["heading"] = -1.7703702498393,
-      ["y"] = 645912.000,
-    } -- end of [1]
-  }, -- end of ["units"]
-  ["y"] = 645912.000,
-  ["radioSet"] = false,
-  ["name"] = "Lightyear-2",
-  ["communication"] = true,
-  ["x"] = -282214.000,
-  ["start_time"] = 0,
-  ["task"] = "R",
-  ["uncontrolled"] = false,
+        [1] = 
+		{
+			["alt"] = dwac.repairAltitude,
+			["alt_type"] = "RADIO",
+			["livery_id"] = "ch-47_green neth",
+        	["skill"] = dwac.aiSkill,
+			["ropeLength"] = 15,
+			["speed"] = dwac.repairSpeed,
+			["type"] = dwac.repairType,
+			["unitId"] = 1,
+			["psi"] = -0.2914567944778,
+			["y"] = 74254.519022107,
+			["x"] = 8869.434313923,
+			["name"] = dwac.repairName,
+			["payload"] = 
+			{
+				["pylons"] = 
+					{
+					}, -- end of ["pylons"]
+				["fuel"] = "3600",
+				["flare"] = 120,
+				["chaff"] = 120,
+				["gun"] = 100,
+			}, -- end of ["payload"]
+			["heading"] = -1.3868209121803,
+			["callsign"] = 
+			{
+				[1] = 1,
+				[2] = 1,
+				[3] = 1,
+				["name"] = dwac.repairCallsign,
+			}, -- end of ["callsign"]
+			["onboard_num"] = dwac.repairNum,
+		}, -- end of [1]
+    }, -- end of ["units"]
+    ["y"] = 74254.519022107,
+    ["x"] = 8869.434313923,
+    ["name"] = dwac.repairGroup,
+    ["communication"] = true,
+    ["start_time"] = 0,
+    ["frequency"] = 121,
 }
+
 dwac.repairInFlight = {
     [coalition.side.RED] = false,
     [coalition.side.BLUE] = false,
@@ -800,7 +826,6 @@ local function setMapUAV(panel)
             dwac.uav["units"][1].y = nearestAirfieldPoint.z
             dwac.uav["route"]["points"][1].x = vector.x
             dwac.uav["route"]["points"][1].y = vector.z
-
             coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.uav)
             trigger.action.outTextForCoalition(panel.coalition, "Launching an UAV from " .. nearestAirfield:getName(), dwac.messageDuration, false)
             local lat, lon, alt = coord.LOtoLL(vector)
@@ -867,10 +892,10 @@ local function setMapREPAIR(panel)
             dwac.repair.y = nearestAirfieldPoint.z  -- don't ask me why
             dwac.repair["units"][1].x = nearestAirfieldPoint.x
             dwac.repair["units"][1].y = nearestAirfieldPoint.z
-            dwac.repair["route"]["points"][1].x = vector.x
-            dwac.repair["route"]["points"][1].y = vector.z
+			dwac.repair["route"]["points"][1]["task"]["params"]["tasks"][1]["params"].x = vector.x
+			dwac.repair["route"]["points"][1]["task"]["params"]["tasks"][1]["params"].y = vector.z
 
-            coalition.addGroup(_country, Group.Category.AIRPLANE, dwac.repair)
+            coalition.addGroup(_country, Group.Category.HELICOPTER, dwac.repair)
             trigger.action.outTextForCoalition(panel.coalition, "Launching support from " .. nearestAirfield:getName(), dwac.messageDuration, false)
             local lat, lon, alt = coord.LOtoLL(vector)
             _DATABASE:E( "User " .. _playerUnit:getPlayerName() .. " requested REPAIRS for Lat: " .. lat .. " Lon: " .. lon )
