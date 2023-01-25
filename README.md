@@ -11,6 +11,8 @@ Script functions for use by Dire Wolves Air Cavalry (DWAC)
         Places an illumination bomb at the marker location and at a configured altitude (700m default)
     -uav
         Spawns a single MQ-9 Reaper at the nearest coalition airbase and routes it to the marker location to orbit
+    -repair
+    	Spawns a single CH-47D to the mark point and will repair any damaged vehicles within a specific radius
     -version
         Displays the version of DWAC script
 ~~~
