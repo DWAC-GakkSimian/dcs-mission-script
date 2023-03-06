@@ -40,14 +40,14 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.1c"
+dwac.version = "0.4.2"
 
 
 -- To enable/disable features set their state here
-dwac.enableMapSmoke = true
+dwac.enableMapSmoke = false
 dwac.enableMapIllumination = true
-dwac.enableMapUAV = true
-dwac.enableMapREPAIR = true
+dwac.enableMapUAV = false
+dwac.enableMapREPAIR = false
 dwac.aiSkill = "Excellent"          -- Random (Random), Excellent (Ace)
 
 -- UAV
@@ -78,7 +78,7 @@ dwac.illuminationRadius = 500       -- units deployed in meters from target poin
 
 -- FAC
 dwac.facEnableSmokeTarget = true    -- allows FAC-A smoking of targets
-dwac.facEnableLazeTarget = false    -- allows FAC-A to laze a target (controls appearance in F10 menu)
+dwac.facEnableLazeTarget = true    -- allows FAC-A to laze a target (controls appearance in F10 menu)
 dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
 
 
@@ -330,42 +330,47 @@ dwac.repairInFlight = {
 -- Methods
 -- ##########################
 
+local function setUpFacA( _client )
+  local _type = _client:GetTypeName()
+  if dwac.IsFacAUnit( _type ) then
+
+    _client.CurrentTarget = nil
+    _client.Targets = {}      
+    _client.CurrentLaserCode = "disabled"
+    _client.CurrentSmokeColor = "disabled"
+    _client.FacAMenu = nil
+    _client.SpotterDetectionAngles = { 1, 2, 12, 11, 10, 9, 8, 7, 6 } -- co-pilot visibility
+    
+    if dwac.facEnableLazeTarget then
+      _client.CurrentLaserCode = dwac.facLaserCodes[1] -- 1688
+    end
+    
+    if dwac.facEnableSmokeTarget then
+      _client.CurrentSmokeColor = dwac.facSmokeColors[2] -- red
+    end
+    
+    dwac.SetupBaseFacAMenu( _client )
+    
+    -- Start target detection
+    local _targetScanObject = SCHEDULER:New( _client )
+    _targetScanObject:Schedule( _client, dwac.ScanForTargets, { _client }, 1, dwac.scanForTargetFrequency, 0.2 ) -- 20% variation on repeat timer
+    
+    -- Start Menu Refresh
+    local _masterObject = SCHEDULER:New( _client )
+    _masterObject:Schedule( _client, dwac.RefreshFacATargetList, { _client }, 1, 10 )
+    
+    -- Display of current target
+    local _currentTargetObject = SCHEDULER:New( _client )
+    _currentTargetObject:Schedule( _client, dwac.DisplayCurrentTarget, { _client }, 1, dwac.displayCurrentTargetFrequency )
+  end
+end
+dwac.setUpFacA = setUpFacA
 
 -- Function FAC Init
 local function InitFacA()
   env.info( "InitFacA()" )
   for _, _client in pairs( _DATABASE.CLIENTS ) do
-    local _type = _client:GetTypeName()
-    if dwac.IsFacAUnit( _type ) then
-      _client.CurrentTarget = nil
-      _client.Targets = {}      
-      _client.CurrentLaserCode = "disabled"
-      _client.CurrentSmokeColor = "disabled"
-      _client.FacAMenu = nil
-      _client.SpotterDetectionAngles = { 1, 2, 12, 11, 10, 9, 8, 7, 6 } -- co-pilot visibility
-      
-      if dwac.facEnableLazeTarget then
-        _client.CurrentLaserCode = dwac.facLaserCodes[1] -- 1688
-      end
-      
-      if dwac.facEnableSmokeTarget then
-        _client.CurrentSmokeColor = dwac.facSmokeColors[2] -- red
-      end
-      
-      dwac.SetupBaseFacAMenu( _client )
-      
-      -- Start target detection
-      local _targetScanObject = SCHEDULER:New( _client )
-      _targetScanObject:Schedule( _client, dwac.ScanForTargets, { _client }, 1, dwac.scanForTargetFrequency, 0.2 ) -- 20% variation on repeat timer
-      
-      -- Start Menu Refresh
-      local _masterObject = SCHEDULER:New( _client )
-      _masterObject:Schedule( _client, dwac.RefreshFacATargetList, { _client }, 1, 10 )
-      
-      -- Display of current target
-      local _currentTargetObject = SCHEDULER:New( _client )
-      _currentTargetObject:Schedule( _client, dwac.DisplayCurrentTarget, { _client }, 1, dwac.displayCurrentTargetFrequency )
-    end
+    _client:Alive( dwac.setUpFacA, _client )
   end
 end
 dwac.InitFacA = InitFacA
@@ -373,6 +378,9 @@ dwac.InitFacA = InitFacA
 -- Function FAC Unit
 local function IsFacAUnit( _type )
   for _, _name in pairs( dwac.facUnits ) do
+    if _type ~= nil then
+      env.info( "Check isFacAUnit: " .. _type )
+    end
     if _name:gsub( "%s+", "" ) == _type then 
       return true
     end
@@ -383,7 +391,7 @@ dwac.IsFacAUnit = IsFacAUnit
 
 -- Function FAC Base
 local function SetupBaseFacAMenu( _client )
-  local _group = GROUP:FindByName( _client.GroupName )
+  local _group = GROUP:FindByName( _client:GetClientGroupName() )
   _client.FacAMenu = MENU_GROUP:New( _group, dwac.facAMenuTexts.baseMenu )
   
   -- Show Current Settings
