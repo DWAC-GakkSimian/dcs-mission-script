@@ -40,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.2"
+dwac.version = "0.4.3"
 
 
 -- To enable/disable features set their state here
@@ -331,9 +331,8 @@ dwac.repairInFlight = {
 -- ##########################
 
 local function setUpFacA( _client )
-  local _type = _client:GetTypeName()
-  if dwac.IsFacAUnit( _type ) then
-
+    _DATABASE:I( "FAC-A client started: " .. _client:GetName() )
+    --_DATABASE:I( "Player '" .. _client:GetPlayer() .. "' entering a FAC-A airframe" )
     _client.CurrentTarget = nil
     _client.Targets = {}      
     _client.CurrentLaserCode = "disabled"
@@ -362,18 +361,8 @@ local function setUpFacA( _client )
     -- Display of current target
     local _currentTargetObject = SCHEDULER:New( _client )
     _currentTargetObject:Schedule( _client, dwac.DisplayCurrentTarget, { _client }, 1, dwac.displayCurrentTargetFrequency )
-  end
 end
 dwac.setUpFacA = setUpFacA
-
--- Function FAC Init
-local function InitFacA()
-  env.info( "InitFacA()" )
-  for _, _client in pairs( _DATABASE.CLIENTS ) do
-    _client:Alive( dwac.setUpFacA, _client )
-  end
-end
-dwac.InitFacA = InitFacA
 
 -- Function FAC Unit
 local function IsFacAUnit( _type )
@@ -1043,4 +1032,19 @@ end
 world.addEventHandler(dwac.dwacEventHandler)
 
 dwac.showVersion()
-dwac.InitFacA()
+
+-- Handle Player entrances
+dwac.ClientSelectHandler = EVENTHANDLER:New()
+dwac.ClientSelectHandler:HandleEvent( EVENTS.PlayerEnterAircraft )
+
+function dwac.ClientSelectHandler:OnEventPlayerEnterAircraft( eventData )
+  _DATABASE:I( "OnPlayerEnterAircraft" )
+  _DATABASE:I( eventData )
+  local _client = CLIENT:FindByName( eventData.IniDCSUnitName )
+  local _type = eventData.IniTypeName
+
+  _DATABASE:I( "InitFacA.Client.Type: " .. _type )
+  if dwac.IsFacAUnit( _type ) then
+    dwac.setUpFacA( _client )
+  end
+end
