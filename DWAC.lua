@@ -40,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.3"
+dwac.version = "0.4.4"
 
 
 -- To enable/disable features set their state here
@@ -424,7 +424,7 @@ dwac.ShowCurrentFacASettings = ShowCurrentFacASettings
 
 local function RefreshFacATargetList( _client )
   local _targetMenu = _client.FacAMenu:GetMenu( dwac.facAMenuTexts.targets )
-  local _group = GROUP:FindByName( _client.GroupName )
+  local _group = GROUP:FindByName( _client:GetClientGroupName() )
   _targetMenu:RemoveSubMenus()
   local _sortedTargets = dwac.sortTargets( _client.Targets )
   local _limitedTargets = dwac.limitTargets( _sortedTargets )
@@ -467,7 +467,7 @@ local function SetCurrentFacATarget( _client, _target )
     end
     dwac.LaseTarget( _client ) -- turn off laser
   else
-    local _group = GROUP:FindByName( _client.GroupName )
+    local _group = GROUP:FindByName( _client:GetClientGroupName() )
     MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.smokeTarget, _client.FacAMenu, dwac.SmokeTarget,  _client )
     MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.laseTarget, _client.FacAMenu, dwac.LaseTarget,  _client )
   end
