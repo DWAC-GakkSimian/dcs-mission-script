@@ -40,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.4"
+dwac.version = "0.4.5"
 
 
 -- To enable/disable features set their state here
@@ -463,7 +463,7 @@ local function SetCurrentFacATarget( _client, _target )
     
     local _laseTargetMenu = _client.FacAMenu:GetMenu( dwac.facAMenuTexts.laseTarget )
     if _laseTargetMenu ~= nil then
-      _laseTargetMenu:Remove( __laseTargetMenu.MenuStamp, _laseTargetMenu.MenuTag )
+      _laseTargetMenu:Remove( _laseTargetMenu.MenuStamp, _laseTargetMenu.MenuTag )
     end
     dwac.LaseTarget( _client ) -- turn off laser
   else
@@ -476,8 +476,11 @@ dwac.SetCurrentFacATarget = SetCurrentFacATarget
 
 local function DisplayCurrentTarget( _client )
   if _client.CurrentTarget ~= nil then
-    local _vector = dwac.getClockDirection( _client, _client.CurrentTarget.unit:GetDCSObject() )
-    MESSAGE:New( _client.CurrentTarget.type .. " at " .. _vector .. " o'clock - " .. math.floor( _client.CurrentTarget.dist ) .. "m", 3, "Current target: ", true ):ToClient( _client )
+    local _target = _client.CurrentTarget.unit:GetDCSObject()
+    if _target ~= nil then
+      local _vector = dwac.getClockDirection( _client,  _target)
+      MESSAGE:New( _client.CurrentTarget.type .. " at " .. _vector .. " o'clock - " .. math.floor( _client.CurrentTarget.dist ) .. "m", 3, "Current target: ", true ):ToClient( _client )
+    end
   end
 end
 dwac.DisplayCurrentTarget = DisplayCurrentTarget
@@ -675,7 +678,7 @@ end
 dwac.sortTargets = sortTargets
 
 local function limitTargets( _targets )
-  local _results = dwac.deepCopy( _targets )
+  local _results = {} --dwac.deepCopy( _targets )
   local _limit = 0
   if #_targets < dwac.maxTargetTracking then
       _limit = #_targets
