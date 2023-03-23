@@ -40,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.5"
+dwac.version = "0.4.6"
 
 
 -- To enable/disable features set their state here
@@ -49,6 +49,7 @@ dwac.enableMapIllumination = true
 dwac.enableMapUAV = false
 dwac.enableMapREPAIR = false
 dwac.aiSkill = "Excellent"          -- Random (Random), Excellent (Ace)
+dwac.listHeloClientsInLog = false        -- writes out all flyable helos to be compared with CTLD pilotname list
 
 -- UAV
 dwac.uavAltitude = 1200             -- limits opfor units visible to the uav
@@ -1049,5 +1050,11 @@ function dwac.ClientSelectHandler:OnEventPlayerEnterAircraft( eventData )
   _DATABASE:I( "InitFacA.Client.Type: " .. _type )
   if dwac.IsFacAUnit( _type ) then
     dwac.setUpFacA( _client )
+  end
+end
+
+if dwac.listHeloClientsInLog then
+  for _,_client in pairs( _DATABASE.CLIENTS ) do
+    BASE:I( _client.ClientName )
   end
 end
