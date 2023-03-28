@@ -40,7 +40,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.6"
+dwac.version = "0.4.7"
 
 
 -- To enable/disable features set their state here
@@ -85,7 +85,7 @@ dwac.facEnableInfraRedTarget = true -- allows FAC-A to put an NVG visible infrar
 
 dwac.facMaxEngagmentRange = 4300    -- meters
 dwac.facMaxDetectionRange = 6000
-dwac.maxTargetTracking = 5
+dwac.maxTargetTracking = 7
 dwac.scanForTargetFrequency = 15    -- longer period reduces the chance of failed target selection due to menu update collision
 dwac.displayCurrentTargetFrequency = 5
 
@@ -430,19 +430,29 @@ local function RefreshFacATargetList( _client )
   local _sortedTargets = dwac.sortTargets( _client.Targets )
   local _limitedTargets = dwac.limitTargets( _sortedTargets )
   
-  _client:E( "Limited Targets: " .. #_limitedTargets )
-  if #_limitedTargets == 0 then
-    dwac.SetCurrentFacATarget( _client, nil )    
-  else
-    local _currentTargetStillInRange = false
-    for _,_target in pairs( _limitedTargets ) do
+  _client:I( "Limited Targets: " .. #_limitedTargets )
+  _client:I( "*** Limited ***")
+  _client:I( _limitedTargets )
+  _client:I( "*** _Limited ***")
+  local _currentTargetStillInRange = false
+  if #_limitedTargets > 0 then
+    if _client.CurrentTarget ~= nil then
+      _client:I( "*** START CURRENT TARGET ***")
+      _client:I( _client.CurrentTarget )
+      _client:I( "*** END CURRENT TARGET ***")
+    end
+    for _index,_target in ipairs( _limitedTargets ) do
+     -- _client:I( _target )
       if _client.CurrentTarget ~= nil and _target.id == _client.CurrentTarget.id then
+        dwac.SetCurrentFacATarget( _client, _target )
         _currentTargetStillInRange = true
       end
-      MENU_GROUP_COMMAND:New( _group, _target.type, _targetMenu, dwac.SetCurrentFacATarget, _client, _target )
+      MENU_GROUP_COMMAND:New( _group, "(" .. _index .. ")" .. _target.type, _targetMenu, dwac.SetCurrentFacATarget, _client, _target )
     end
     
-    if _currentTargetStillInRange == false then
+    if _client.CurrentTarget ~= nil and _currentTargetStillInRange == false then
+      MESSAGE:New( _client.CurrentTarget.type .. ": Target lost", 3, "Current target: ", true ):ToClient( _client )
+      _client:I( "Target Lost" )
       dwac.SetCurrentFacATarget( _client, nil )
     end
   end
@@ -469,6 +479,7 @@ local function SetCurrentFacATarget( _client, _target )
     dwac.LaseTarget( _client ) -- turn off laser
   else
     local _group = GROUP:FindByName( _client:GetClientGroupName() )
+    _client.CurrentTarget.dist = dwac.getDistance( _client:GetCoordinate(), _target.unit:GetCoordinate() )
     MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.smokeTarget, _client.FacAMenu, dwac.SmokeTarget,  _client )
     MENU_GROUP_COMMAND:New( _group, dwac.facAMenuTexts.laseTarget, _client.FacAMenu, dwac.LaseTarget,  _client )
   end
