@@ -333,7 +333,6 @@ dwac.repairInFlight = {
 
 local function setUpFacA( _client )
     _DATABASE:I( "FAC-A client started: " .. _client:GetName() )
-    --_DATABASE:I( "Player '" .. _client:GetPlayer() .. "' entering a FAC-A airframe" )
     _client.CurrentTarget = nil
     _client.Targets = {}      
     _client.CurrentLaserCode = "disabled"
@@ -429,20 +428,10 @@ local function RefreshFacATargetList( _client )
   _targetMenu:RemoveSubMenus()
   local _sortedTargets = dwac.sortTargets( _client.Targets )
   local _limitedTargets = dwac.limitTargets( _sortedTargets )
-  
-  _client:I( "Limited Targets: " .. #_limitedTargets )
-  _client:I( "*** Limited ***")
-  _client:I( _limitedTargets )
-  _client:I( "*** _Limited ***")
+
   local _currentTargetStillInRange = false
   if #_limitedTargets > 0 then
-    if _client.CurrentTarget ~= nil then
-      _client:I( "*** START CURRENT TARGET ***")
-      _client:I( _client.CurrentTarget )
-      _client:I( "*** END CURRENT TARGET ***")
-    end
     for _index,_target in ipairs( _limitedTargets ) do
-     -- _client:I( _target )
       if _client.CurrentTarget ~= nil and _target.id == _client.CurrentTarget.id then
         dwac.SetCurrentFacATarget( _client, _target )
         _currentTargetStillInRange = true
@@ -452,7 +441,6 @@ local function RefreshFacATargetList( _client )
     
     if _client.CurrentTarget ~= nil and _currentTargetStillInRange == false then
       MESSAGE:New( _client.CurrentTarget.type .. ": Target lost", 3, "Current target: ", true ):ToClient( _client )
-      _client:I( "Target Lost" )
       dwac.SetCurrentFacATarget( _client, nil )
     end
   end
