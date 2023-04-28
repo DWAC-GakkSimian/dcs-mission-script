@@ -518,18 +518,20 @@ dwac.SmokeTarget = SmokeTarget
 
 local function ScanForTargets( _client )
   local _unit = _client:GetClientGroupUnit()
-  local _pos = _unit:GetCoordinate()
-  local _searchVolume = {
-    id = world.VolumeType.SPHERE,
-    params = {
-      point = _pos,
-      radius = dwac.facMaxDetectionRange
+  if _unit ~= nil then
+    local _pos = _unit:GetCoordinate()
+    local _searchVolume = {
+      id = world.VolumeType.SPHERE,
+      params = {
+        point = _pos,
+        radius = dwac.facMaxDetectionRange
+      }
     }
-  }
-  
-  _client.Targets = {}
-  
-  world.searchObjects( Object.Category.UNIT, _searchVolume, dwac.ProcessFacAScanResults, _client)
+    
+    _client.Targets = {}
+    
+    world.searchObjects( Object.Category.UNIT, _searchVolume, dwac.ProcessFacAScanResults, _client)
+  end
 end
 dwac.ScanForTargets = ScanForTargets
 
