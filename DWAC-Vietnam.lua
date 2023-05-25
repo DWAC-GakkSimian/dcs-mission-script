@@ -93,8 +93,8 @@ dwac.illuminationRadius = 500       	-- units deployed in meters from target poi
 
 -- FAC
 dwac.facEnableSmokeTarget = true    	-- allows FAC-A smoking of targets
-dwac.facEnableLazeTarget = true    		-- allows FAC-A to laze a target (controls appearance in F10 menu)
-dwac.facEnableInfraRedTarget = true 	-- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
+dwac.facEnableLazeTarget = false    		-- allows FAC-A to laze a target (controls appearance in F10 menu)
+dwac.facEnableInfraRedTarget = false 	-- allows FAC-A to put an NVG visible infrared beam on target (with laser).  Not recommended for PvP I suppose.
 
 
 dwac.facMaxEngagmentRange = 4300    	-- meters
