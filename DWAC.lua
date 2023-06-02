@@ -16,6 +16,9 @@
 			
         - REPAIR: Map targeted
             Usage: On the F10 map, place a comment circle with text of "-repair" and minimize.  Limit one(1) Optional CH-47D in flight.
+
+        - DESTROY: 'explode' and then remove all vehicles within x radius of comment circle with text "-destroy".  Limited to players listed
+            in dwac.authorizedDestroyers.  Used to reduce the polygon count in areas cleared of threats.
 			
         - VERSION: Map activated
             Usage: On the F10 map, place a comment circle with text of "-version" to see the current version of DWAC
@@ -40,7 +43,7 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.4.9"
+dwac.version = "0.5.0"
 
 -- To enable/disable features set their state here
 dwac.enableMapSmoke = false
@@ -91,6 +94,10 @@ dwac.illuminationPower = 1000000    	-- 1 to 1000000(max) brightness
 dwac.illuminationUnits = 3          	-- number of illum bombs deployed in a star pattern
 dwac.illuminationRadius = 500       	-- units deployed in meters from target point
 
+-- Destroy
+dwac.authorizedDestroyers = { "[GR] Gakk Simian", "DWAC 1-2 |Buz" }
+dwac.destroyRadius = 2000               -- meters
+
 -- FAC
 dwac.facEnableSmokeTarget = true    	-- allows FAC-A smoking of targets
 dwac.facEnableLazeTarget = true    		-- allows FAC-A to laze a target (controls appearance in F10 menu)
@@ -103,7 +110,7 @@ dwac.maxTargetTracking = 7
 dwac.scanForTargetFrequency = 15    	-- longer period reduces the chance of failed target selection due to menu update collision
 dwac.displayCurrentTargetFrequency = 5
 
-dwac.MapRequest = {SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4, REPAIR = 5, DEBUG = 6}
+dwac.MapRequest = { SMOKE = 1, ILLUMINATION = 2, VERSION = 3, UAV = 4, REPAIR = 5, DEBUG = 6, DESTROY = 7 }
 dwac.messageDuration = 20 				-- seconds
 
 dwac.facAMenuTexts = {
@@ -1061,6 +1068,11 @@ local function getMarkerRequest(requestText)
     if isVersionRequest then
         return dwac.MapRequest.VERSION
     end
+	
+    local isVersionRequest = lowerText:match("^-destroy%s*$")
+    if isVersionRequest then
+        return dwac.MapRequest.DESTROY
+    end
 end
 dwac.getMarkerRequest = getMarkerRequest
 
@@ -1097,6 +1109,39 @@ local function setMapIllumination(vector)
     return false
 end
 dwac.setMapIllumination = setMapIllumination
+
+local function requestDestroy( panel )
+    BASE:I( "Panel destroy command issued by: "..panel.author )
+    for _,_auth in pairs( dwac.authorizedDestroyers ) do
+        if _auth == panel.author then
+            local _vol = {
+                id = world.VolumeType.SPHERE,
+                params = {
+                    point = panel.pos,
+                    radius = dwac.destroyRadius
+                }
+            }
+            if dwac.uavInFlight[panel.coalition] then
+                return true -- return without doing anything, but clear the marker
+            end
+            world.searchObjects( Object.Category.UNIT, _vol, dwac.destroyUnit )
+            break
+        end
+    end
+end
+dwac.requestDestroy = requestDestroy
+
+local function destroyUnit( unit )
+    local _unit = UNIT:Find( unit )
+    BASE:I( "Unit found: ".._unit:Name() )
+    local _isAlive = _unit:IsAlive()
+    if _isAlive == true then
+        _unit:Destroy( true ) -- generate crash or dead event based on unit type
+    else
+        _unit:Destroy( false ) -- no event generated
+    end
+end
+dwac.destroyUnit = destroyUnit
 
 -- Function UAV active or not
 local function uavSearch(_unit, args)
@@ -1435,6 +1480,9 @@ function dwac.dwacEventHandler:onEvent(event)
                     dwac.showVersion()
 						timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                     break
+                elseif markType == dwac.MapRequest.DESTROY then
+                    dwac.requestDestroy( panel )
+                    timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
                 end
             end
         end
