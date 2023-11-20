@@ -43,19 +43,19 @@ if _DATABASE == nil then
 end
 
 dwac = {}
-dwac.version = "0.5.0"
+dwac.version = "0.6.0"
 
 -- To enable/disable features set their state here
-dwac.enableMapSmoke = false
+dwac.enableMapSmoke = true
 dwac.enableMapIllumination = true
-dwac.enableMapUAV = false
-dwac.enableMapREPAIR = false
-dwac.enableMapDEBUG = false
+dwac.enableMapUAV = true
+dwac.enableMapREPAIR = true
+dwac.enableMapDEBUG = true
 dwac.listHeloClientsInLog = false   	-- writes out all flyable helos to be compared with CTLD pilotname list
 
 -- General / Common Settings
 dwac.messageDuration = 20 				-- seconds
-dwac.spawnAir = 0						-- UNDER CONSTRUCTION Spawn units in air (1) or on airfield (0)
+dwac.spawnAir = 1						-- UNDER CONSTRUCTION Spawn units in air (1) or on airfield (0)
 dwac.aiSkill = "Excellent"          	-- Random (Random), Excellent (Ace)
 dwac.alt_Type = "RADIO"					-- BARO (Sea Level) RADIO (Ground Level)
 
@@ -1155,6 +1155,8 @@ dwac.uavSearch = uavSearch
 
 -- Function UAV Spawn
 local function setMapUAV(panel)
+    -- BASE:I( "setMapUAV()")
+    -- BASE:I( panel.pos )
     local vector = panel.pos
     local _author = panel.author
     local _playerUnit = nil
@@ -1457,6 +1459,8 @@ function dwac.dwacEventHandler:onEvent(event)
                     end
                     break
                 elseif dwac.enableMapIllumination and markType == dwac.MapRequest.ILLUMINATION then
+                    BASE:I( "ILLUMINATE" )
+                    BASE:I( panel )
                     panel.pos.y = dwac.mapIlluminationAltitude
                     if dwac.setMapIllumination(panel.pos) then
                         timer.scheduleFunction(trigger.action.removeMark, panel.idx, timer.getTime() + 2)
